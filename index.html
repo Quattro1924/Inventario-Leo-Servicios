@@ -51,7 +51,7 @@
     font-weight: 500;
   }
   .nav button.active { background: white; color: var(--red-dark); }
-  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .wrap { max-width: 1500px; margin: 0 auto; padding: 24px; }
   .page { display: none; }
   .page.active { display: block; }
 
@@ -567,7 +567,7 @@ function renderMovimientos() {
     container.innerHTML = '<div class="empty-state">Aún no hay movimientos registrados.</div>';
     return;
   }
-  const sorted = [...DB.Movimientos].sort((a,b) => (b.Fecha||'').localeCompare(a.Fecha||''));
+  const sorted = [...DB.Movimientos].reverse().sort((a,b) => dateOnly(b.Fecha||'').localeCompare(dateOnly(a.Fecha||'')));
   const rows = sorted.map(m => {
     const badge = m.Tipo === 'Entrada' ? '<span class="badge in">Entrada</span>' : '<span class="badge outmov">Salida</span>';
     return `<tr>
@@ -804,7 +804,7 @@ document.querySelectorAll('.tab2').forEach(tab => {
 function renderGRTable(list, containerId, sheet) {
   const container = document.getElementById(containerId);
   if (list.length === 0) { container.innerHTML = '<div class="empty-state">Sin registros aún.</div>'; return; }
-  const sorted = [...list].sort((a,b) => (b.Fecha||'').localeCompare(a.Fecha||''));
+  const sorted = [...list].reverse().sort((a,b) => dateOnly(b.Fecha||'').localeCompare(dateOnly(a.Fecha||'')));
   const rows = sorted.map(r => `<tr>
     <td>${esc(dateOnly(r.Fecha))}</td><td>${esc(r.Motivo)}</td><td>${money(r.Monto)}</td>
     <td><div class="row-actions">
