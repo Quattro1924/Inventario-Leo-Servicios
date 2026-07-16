@@ -272,6 +272,10 @@
       <div class="field"><label>Código</label><input id="eCodigo" type="text"></div>
       <div class="field"><label>Lote</label><input id="eLote" type="text"></div>
     </div>
+    <div class="field-row">
+      <div class="field"><label>Repuesto</label><input id="eRepuestoInfo" type="text" disabled></div>
+      <div class="field"><label>Modelo</label><input id="eModeloInfo" type="text" disabled></div>
+    </div>
     <div class="field"><label>Fecha</label><input id="eFecha" type="date"></div>
     <div class="field-row">
       <div class="field"><label>Precio SAP $</label><input id="ePrecioSapUsd" type="number" step="0.01"></div>
@@ -291,13 +295,22 @@
   <div class="modal">
     <h2>Registrar salida</h2>
     <div class="field"><label>Código</label>
-      <select id="sCodigo"></select>
+      <input id="sCodigo" type="text" placeholder="Escribe el código del repuesto">
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Repuesto</label><input id="sRepuestoInfo" type="text" disabled></div>
+      <div class="field"><label>Modelo</label><input id="sModeloInfo" type="text" disabled></div>
     </div>
     <div class="field"><label>Stock disponible</label><input id="sStockInfo" type="text" disabled></div>
     <div class="field"><label>Cantidad</label><input id="sCantidad" type="number"></div>
-    <div class="field"><label class="chk"><input type="checkbox" id="sPrecioEspecialChk"> Precio especial para esta venta</label></div>
-    <div class="field" id="sPrecioEspecialWrap" style="display:none;">
-      <label>Precio de venta especial</label><input id="sPrecioEspecial" type="number" step="0.01">
+    <div class="field">
+      <label>Precio de venta</label>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input id="sPrecioVentaBox" type="number" step="0.01" disabled style="flex:1;">
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; color:var(--text-muted); white-space:nowrap;">
+          <input type="checkbox" id="sPrecioEspecialChk" style="width:16px; height:16px; margin:0;"> Especial
+        </label>
+      </div>
     </div>
     <div class="field"><label>Fecha</label><input id="sFecha" type="date"></div>
     <div class="modal-actions">
@@ -321,6 +334,19 @@
   </div>
 </div>
 
+<!-- MODAL: Editar cantidad de movimiento -->
+<div class="modal-overlay" id="modalEditMov">
+  <div class="modal">
+    <h2>Editar cantidad</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin-top:-8px;" id="editMovInfo"></p>
+    <div class="field"><label>Nueva cantidad</label><input id="emCantidad" type="number"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelEditMov">Cancelar</button>
+      <button class="btn primary" id="btnSaveEditMov">Guardar cambio</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -332,6 +358,7 @@ let DB = { Inventario: [], Movimientos: [], Gastos: [], Retiro: [] };
 let editingProductoId = null;
 let grType = null; // 'Gastos' | 'Retiro'
 let editingGRId = null;
+let editingMovId = null;
 
 function uid(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function money(n) { n = Number(n) || 0; return 'S/ ' + n.toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
@@ -549,25 +576,32 @@ function renderMovimientos() {
       <td>${m.PrecioCompra ? money(m.PrecioCompra) : '—'}</td><td>${m.PrecioVenta ? money(m.PrecioVenta) : '—'}</td>
       <td>${m.TotalCompra ? money(m.TotalCompra) : '—'}</td><td>${m.TotalVenta ? money(m.TotalVenta) : '—'}</td>
       <td>${m.Ganancia ? money(m.Ganancia) : '—'}</td><td>${esc(m.NroPedido)}</td>
+      <td><div class="row-actions">
+        <button class="btn small" onclick="openEditMov('${m.ID}')">Editar cant.</button>
+        <button class="btn small" onclick="deleteMov('${m.ID}')">Eliminar</button>
+      </div></td>
     </tr>`;
   }).join('');
   container.innerHTML = `<table><thead><tr>
     <th>Fecha</th><th>Tipo</th><th>Código</th><th>Lote</th><th>Repuesto</th><th>Modelo</th><th>Cant.</th>
-    <th>P. compra</th><th>P. venta</th><th>Total compra</th><th>Total venta</th><th>Ganancia</th><th>N° Pedido</th>
+    <th>P. compra</th><th>P. venta</th><th>Total compra</th><th>Total venta</th><th>Ganancia</th><th>N° Pedido</th><th></th>
   </tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function refreshCodigoSelects() {
-  const codigos = [...new Set(DB.Inventario.map(p => p.Codigo))].filter(Boolean);
-  const sSel = document.getElementById('sCodigo');
-  sSel.innerHTML = codigos.map(c => `<option value="${esc(c)}">${esc(c)} - ${esc((DB.Inventario.find(p=>p.Codigo===c)||{}).Repuesto||'')}</option>`).join('');
   const eSel = document.getElementById('eLoteExistente');
   eSel.innerHTML = '<option value="">— Nuevo lote —</option>' + DB.Inventario.map(p => `<option value="${p.ID}">${esc(p.Codigo)} | ${esc(p.Lote)} - ${esc(p.Repuesto)}</option>`).join('');
+}
+
+function findByCodigo(codigo) {
+  return DB.Inventario.find(p => (p.Codigo||'').toLowerCase() === (codigo||'').toLowerCase());
 }
 
 // Entrada modal
 document.getElementById('btnNewEntrada').addEventListener('click', () => {
   ['eCodigo','eLote','ePrecioSapUsd','eTc','eCantidad','eNroPedido'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('eRepuestoInfo').value = '';
+  document.getElementById('eModeloInfo').value = '';
   document.getElementById('eFecha').value = todayStr();
   document.getElementById('eLoteExistente').value = '';
   document.getElementById('modalEntrada').classList.add('open');
@@ -575,9 +609,14 @@ document.getElementById('btnNewEntrada').addEventListener('click', () => {
 document.getElementById('btnCancelEntrada').addEventListener('click', () => document.getElementById('modalEntrada').classList.remove('open'));
 document.getElementById('eLoteExistente').addEventListener('change', (e) => {
   const id = e.target.value;
-  if (!id) { document.getElementById('eCodigo').value=''; document.getElementById('eLote').value=''; return; }
+  if (!id) { document.getElementById('eCodigo').value=''; document.getElementById('eLote').value=''; document.getElementById('eRepuestoInfo').value=''; document.getElementById('eModeloInfo').value=''; return; }
   const p = DB.Inventario.find(x => x.ID === id);
-  if (p) { document.getElementById('eCodigo').value = p.Codigo; document.getElementById('eLote').value = p.Lote; }
+  if (p) { document.getElementById('eCodigo').value = p.Codigo; document.getElementById('eLote').value = p.Lote; document.getElementById('eRepuestoInfo').value = p.Repuesto; document.getElementById('eModeloInfo').value = p.Modelo; }
+});
+document.getElementById('eCodigo').addEventListener('input', (e) => {
+  const p = findByCodigo(e.target.value.trim());
+  document.getElementById('eRepuestoInfo').value = p ? p.Repuesto : '';
+  document.getElementById('eModeloInfo').value = p ? p.Modelo : '';
 });
 
 document.getElementById('btnSaveEntrada').addEventListener('click', async () => {
@@ -624,36 +663,49 @@ document.getElementById('btnSaveEntrada').addEventListener('click', async () => 
 
 // Salida modal
 document.getElementById('btnNewSalida').addEventListener('click', () => {
+  document.getElementById('sCodigo').value = '';
+  document.getElementById('sRepuestoInfo').value = '';
+  document.getElementById('sModeloInfo').value = '';
+  document.getElementById('sStockInfo').value = '';
   document.getElementById('sCantidad').value = '';
   document.getElementById('sPrecioEspecialChk').checked = false;
-  document.getElementById('sPrecioEspecialWrap').style.display = 'none';
-  document.getElementById('sPrecioEspecial').value = '';
+  document.getElementById('sPrecioVentaBox').disabled = true;
+  document.getElementById('sPrecioVentaBox').value = '';
   document.getElementById('sFecha').value = todayStr();
-  updateStockInfo();
   document.getElementById('modalSalida').classList.add('open');
 });
 document.getElementById('btnCancelSalida').addEventListener('click', () => document.getElementById('modalSalida').classList.remove('open'));
-document.getElementById('sCodigo').addEventListener('change', updateStockInfo);
+document.getElementById('sCodigo').addEventListener('input', updateStockInfo);
 function updateStockInfo() {
-  const codigo = document.getElementById('sCodigo').value;
-  const total = DB.Inventario.filter(p => p.Codigo === codigo).reduce((s,p) => s + toNum(p.Stock), 0);
-  document.getElementById('sStockInfo').value = total + ' unidades disponibles (todos los lotes)';
+  const codigo = document.getElementById('sCodigo').value.trim();
+  const lotes = DB.Inventario.filter(p => (p.Codigo||'').toLowerCase() === codigo.toLowerCase());
+  const total = lotes.reduce((s,p) => s + toNum(p.Stock), 0);
+  document.getElementById('sStockInfo').value = codigo ? (total + ' unidades disponibles (todos los lotes)') : '';
+  const primero = lotes.filter(p => toNum(p.Stock) > 0).sort((a,b) => dateOnly(a.FechaLote).localeCompare(dateOnly(b.FechaLote)))[0] || lotes[0];
+  document.getElementById('sRepuestoInfo').value = primero ? primero.Repuesto : '';
+  document.getElementById('sModeloInfo').value = primero ? primero.Modelo : '';
+  if (!document.getElementById('sPrecioEspecialChk').checked) {
+    document.getElementById('sPrecioVentaBox').value = primero ? primero.PrecioVenta : '';
+  }
 }
 document.getElementById('sPrecioEspecialChk').addEventListener('change', (e) => {
-  document.getElementById('sPrecioEspecialWrap').style.display = e.target.checked ? 'block' : 'none';
+  document.getElementById('sPrecioVentaBox').disabled = !e.target.checked;
+  if (!e.target.checked) updateStockInfo();
 });
 
 document.getElementById('btnSaveSalida').addEventListener('click', async () => {
-  const codigo = document.getElementById('sCodigo').value;
+  const codigo = document.getElementById('sCodigo').value.trim();
   let cantidad = toNum(document.getElementById('sCantidad').value);
   const fecha = document.getElementById('sFecha').value;
   const especial = document.getElementById('sPrecioEspecialChk').checked;
-  const precioEspecial = toNum(document.getElementById('sPrecioEspecial').value);
+  const precioEspecial = toNum(document.getElementById('sPrecioVentaBox').value);
   if (!codigo || cantidad <= 0) { showToast('Completa código y cantidad'); return; }
 
   // FIFO: lotes de ese codigo con stock > 0, ordenados por FechaLote ascendente
-  let lotes = DB.Inventario.filter(p => p.Codigo === codigo && toNum(p.Stock) > 0)
+  let lotes = DB.Inventario.filter(p => (p.Codigo||'').toLowerCase() === codigo.toLowerCase() && toNum(p.Stock) > 0)
     .sort((a,b) => dateOnly(a.FechaLote).localeCompare(dateOnly(b.FechaLote)));
+
+  if (lotes.length === 0) { showToast('No se encontró ese código con stock disponible'); return; }
 
   const totalDisponible = lotes.reduce((s,p) => s + toNum(p.Stock), 0);
   if (cantidad > totalDisponible) {
@@ -671,7 +723,7 @@ document.getElementById('btnSaveSalida').addEventListener('click', async () => {
 
     await apiPost('Inventario', 'update', lote.ID, { Stock: stockLote - consumo });
     await apiPost('Movimientos', 'add', null, {
-      ID: uid('M'), Fecha: fecha, Tipo: 'Salida', Lote: lote.Lote, Codigo: codigo,
+      ID: uid('M'), Fecha: fecha, Tipo: 'Salida', Lote: lote.Lote, Codigo: lote.Codigo,
       Modelo: lote.Modelo, Repuesto: lote.Repuesto,
       PrecioSAP: lote.PrecioSAP_USD, TC: lote.TC, PrecioCompra: lote.PrecioSAP_S, PrecioVenta: precioVenta,
       Cantidad: consumo, TotalCompra: '', TotalVenta: Math.round(precioVenta*consumo*100)/100, Ganancia: ganancia,
@@ -683,6 +735,61 @@ document.getElementById('btnSaveSalida').addEventListener('click', async () => {
   await loadAll();
   showToast('Salida registrada');
 });
+
+// Editar / eliminar movimiento
+function openEditMov(id) {
+  const m = DB.Movimientos.find(x => x.ID === id);
+  if (!m) return;
+  editingMovId = id;
+  document.getElementById('editMovInfo').textContent = `${m.Tipo} · ${m.Codigo} · ${m.Repuesto} (cantidad actual: ${toNum(m.Cantidad)})`;
+  document.getElementById('emCantidad').value = toNum(m.Cantidad);
+  document.getElementById('modalEditMov').classList.add('open');
+}
+document.getElementById('btnCancelEditMov').addEventListener('click', () => document.getElementById('modalEditMov').classList.remove('open'));
+document.getElementById('btnSaveEditMov').addEventListener('click', async () => {
+  const m = DB.Movimientos.find(x => x.ID === editingMovId);
+  if (!m) return;
+  const nuevaCantidad = toNum(document.getElementById('emCantidad').value);
+  if (nuevaCantidad <= 0) { showToast('La cantidad debe ser mayor a 0'); return; }
+  const cantidadAnterior = toNum(m.Cantidad);
+  const delta = nuevaCantidad - cantidadAnterior;
+
+  // Ajustar stock del lote correspondiente
+  const lote = DB.Inventario.find(p => p.Codigo === m.Codigo && p.Lote === m.Lote);
+  if (lote) {
+    const ajuste = m.Tipo === 'Entrada' ? delta : -delta;
+    await apiPost('Inventario', 'update', lote.ID, { Stock: toNum(lote.Stock) + ajuste });
+  }
+
+  // Recalcular totales del movimiento
+  const data = { Cantidad: nuevaCantidad };
+  if (m.Tipo === 'Entrada') {
+    data.TotalCompra = Math.round(toNum(m.PrecioCompra) * nuevaCantidad * 100) / 100;
+  } else {
+    data.TotalVenta = Math.round(toNum(m.PrecioVenta) * nuevaCantidad * 100) / 100;
+    data.Ganancia = Math.round((toNum(m.PrecioVenta) - toNum(m.PrecioCompra)) * nuevaCantidad * 100) / 100;
+  }
+  await apiPost('Movimientos', 'update', editingMovId, data);
+
+  document.getElementById('modalEditMov').classList.remove('open');
+  await loadAll();
+  showToast('Cantidad actualizada');
+});
+
+async function deleteMov(id) {
+  const m = DB.Movimientos.find(x => x.ID === id);
+  if (!m) return;
+  if (!confirm(`¿Eliminar este movimiento de ${m.Tipo.toLowerCase()} (${m.Repuesto}, cantidad ${toNum(m.Cantidad)})? Esto también ajustará el stock.`)) return;
+
+  const lote = DB.Inventario.find(p => p.Codigo === m.Codigo && p.Lote === m.Lote);
+  if (lote) {
+    const ajuste = m.Tipo === 'Entrada' ? -toNum(m.Cantidad) : toNum(m.Cantidad);
+    await apiPost('Inventario', 'update', lote.ID, { Stock: toNum(lote.Stock) + ajuste });
+  }
+  await apiPost('Movimientos', 'delete', id, {});
+  await loadAll();
+  showToast('Movimiento eliminado');
+}
 
 // ---------- GASTOS / RETIROS ----------
 document.querySelectorAll('.tab2').forEach(tab => {
@@ -699,7 +806,7 @@ function renderGRTable(list, containerId, sheet) {
   if (list.length === 0) { container.innerHTML = '<div class="empty-state">Sin registros aún.</div>'; return; }
   const sorted = [...list].sort((a,b) => (b.Fecha||'').localeCompare(a.Fecha||''));
   const rows = sorted.map(r => `<tr>
-    <td>${esc(r.Fecha)}</td><td>${esc(r.Motivo)}</td><td>${money(r.Monto)}</td>
+    <td>${esc(dateOnly(r.Fecha))}</td><td>${esc(r.Motivo)}</td><td>${money(r.Monto)}</td>
     <td><div class="row-actions">
       <button class="btn small" onclick="openEditGR('${sheet}','${r.ID}')">Editar</button>
       <button class="btn small" onclick="deleteGR('${sheet}','${r.ID}')">Eliminar</button>
