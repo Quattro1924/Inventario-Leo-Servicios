@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Inventario - Repuestos Honda</title>
+<style>
+  :root {
+    --bg: #faf6f5;
+    --panel: #ffffff;
+    --border: #f0dcda;
+    --border-strong: #e3bdb8;
+    --text: #2b2a27;
+    --text-muted: #8a7a77;
+    --red: #b8342a;
+    --red-dark: #8f281f;
+    --red-light: #f7e6e4;
+    --green: #2f6d50;
+    --green-light: #e6efec;
+    --amber: #92650f;
+    --amber-light: #fbf0dd;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .topbar {
+    background: var(--red);
+    color: white;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .topbar h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .nav { display: flex; gap: 6px; flex-wrap: wrap; }
+  .nav button {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .nav button.active { background: white; color: var(--red-dark); }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .stat-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+  .stat-value { font-size: 20px; font-weight: 600; }
+  .stat-value.red { color: var(--red); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.amber { color: var(--amber); }
+
+  .toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  input, select {
+    height: 38px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 0 10px;
+    font-size: 14px;
+    background: white;
+    color: var(--text);
+  }
+  input:focus, select:focus { outline: none; border-color: var(--red); }
+  label.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); }
+  #search { flex: 1; min-width: 180px; }
+
+  button.btn {
+    height: 38px;
+    padding: 0 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-strong);
+    background: white;
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  button.btn:hover { background: #f7f0ef; }
+  button.btn.primary { background: var(--red); color: white; border-color: var(--red); }
+  button.btn.primary:hover { background: var(--red-dark); }
+  button.small { height: 30px; padding: 0 10px; font-size: 12px; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  thead { background: var(--red-light); }
+  th, td { text-align: left; padding: 9px 10px; font-size: 13px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { font-size: 11px; text-transform: uppercase; color: var(--red-dark); font-weight: 600; letter-spacing: 0.02em; }
+  tr:last-child td { border-bottom: none; }
+  .table-scroll { overflow-x: auto; border-radius: var(--radius); }
+
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+  .badge.ok { background: var(--green-light); color: var(--green); }
+  .badge.low { background: var(--amber-light); color: var(--amber); }
+  .badge.out { background: var(--red-light); color: var(--red); }
+  .badge.in { background: var(--green-light); color: var(--green); }
+  .badge.outmov { background: var(--red-light); color: var(--red); }
+
+  .empty-state { text-align: center; padding: 50px 20px; color: var(--text-muted); }
+  .tabs2 { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab2 { padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--text-muted); border: 1px solid transparent; }
+  .tab2.active { background: white; color: var(--red-dark); border-color: var(--border); font-weight: 500; }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: 12px; padding: 24px; width: 100%; max-width: 460px; max-height: 90vh; overflow-y: auto; }
+  .modal h2 { margin: 0 0 16px; font-size: 17px; color: var(--red-dark); }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px; }
+  .field input, .field select { width: 100%; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: white; padding: 10px 18px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 200; }
+  .toast.show { opacity: 1; }
+  .loading { text-align: center; padding: 40px; color: var(--text-muted); }
+  .config-box { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 20px; }
+  .config-box.warn { border-color: var(--amber); background: var(--amber-light); }
+  .section-title { font-size: 15px; font-weight: 600; margin: 0 0 12px; color: var(--red-dark); }
+  .row-actions { display: flex; gap: 6px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Repuestos Honda — Control de Inventario</h1>
+  <div class="nav">
+    <button data-page="resumen" class="active">Resumen</button>
+    <button data-page="inventario">Inventario</button>
+    <button data-page="movimientos">Movimientos</button>
+    <button data-page="gastosretiros">Gastos y Retiros</button>
+    <button data-page="config">Configuración</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- CONFIG PAGE -->
+  <div class="page" id="page-config">
+    <div class="config-box">
+      <div class="section-title">Conexión con Google Sheets</div>
+      <p style="font-size:13px; color:var(--text-muted); margin-top:0;">Pega aquí la URL de tu Apps Script Web App (la que copiaste al desplegarlo). Esto conecta el programa con tu Google Sheet en la nube.</p>
+      <div class="field">
+        <label>URL del Web App</label>
+        <input id="webAppUrl" type="text" placeholder="https://script.google.com/macros/s/XXXXXXX/exec" style="width:100%;">
+      </div>
+      <button class="btn primary" id="btnSaveUrl">Guardar y conectar</button>
+      <span id="connStatus" style="margin-left:10px; font-size:13px;"></span>
+    </div>
+    <div class="field">
+      <label>Inversión total (para calcular Rentabilidad y Crecimiento real)</label>
+      <input id="inversionInput" type="number" step="0.01" placeholder="0.00" style="max-width:200px;">
+      <button class="btn small" id="btnSaveInversion" style="margin-left:8px;">Guardar</button>
+    </div>
+  </div>
+
+  <!-- RESUMEN -->
+  <div class="page active" id="page-resumen">
+    <div class="stats">
+      <div class="stat-card"><div class="stat-label">Inversión</div><div class="stat-value" id="rInversion">S/ 0</div></div>
+      <div class="stat-card"><div class="stat-label">Saldo</div><div class="stat-value" id="rSaldo">S/ 0</div></div>
+      <div class="stat-card"><div class="stat-label">Compras</div><div class="stat-value" id="rCompras">S/ 0</div></div>
+      <div class="stat-card"><div class="stat-label">Ventas</div><div class="stat-value" id="rVentas">S/ 0</div></div>
+      <div class="stat-card"><div class="stat-label">Gastos</div><div class="stat-value" id="rGastos">S/ 0</div></div>
+      <div class="stat-card"><div class="stat-label">Retiros</div><div class="stat-value" id="rRetiros">S/ 0</div></div>
+      <div class="stat-card"><div class="stat-label">Ganancia bruta</div><div class="stat-value green" id="rGanBruta">S/ 0</div></div>
+      <div class="stat-card"><div class="stat-label">Ganancia neta</div><div class="stat-value green" id="rGanNeta">S/ 0</div></div>
+      <div class="stat-card"><div class="stat-label">Rentabilidad</div><div class="stat-value" id="rRent">0%</div></div>
+      <div class="stat-card"><div class="stat-label">Valor inventario</div><div class="stat-value" id="rValorInv">S/ 0</div></div>
+      <div class="stat-card"><div class="stat-label">Capital real</div><div class="stat-value" id="rCapital">S/ 0</div></div>
+      <div class="stat-card"><div class="stat-label">Crecimiento real</div><div class="stat-value green" id="rCrecimiento">S/ 0</div></div>
+    </div>
+  </div>
+
+  <!-- INVENTARIO -->
+  <div class="page" id="page-inventario">
+    <div class="toolbar">
+      <input id="invSearch" type="text" placeholder="Buscar por repuesto, código o modelo...">
+      <select id="invFilter">
+        <option value="all">Todos</option>
+        <option value="low">Stock bajo</option>
+        <option value="out">Agotados</option>
+      </select>
+      <button class="btn primary" id="btnNewProducto">+ Nuevo producto / lote</button>
+    </div>
+    <div class="table-scroll" id="invTableContainer"><div class="loading">Cargando inventario...</div></div>
+  </div>
+
+  <!-- MOVIMIENTOS -->
+  <div class="page" id="page-movimientos">
+    <div class="toolbar">
+      <button class="btn primary" id="btnNewEntrada">+ Registrar entrada</button>
+      <button class="btn" id="btnNewSalida" style="border-color:var(--red); color:var(--red);">+ Registrar salida</button>
+    </div>
+    <div class="table-scroll" id="movTableContainer"><div class="loading">Cargando movimientos...</div></div>
+  </div>
+
+  <!-- GASTOS Y RETIROS -->
+  <div class="page" id="page-gastosretiros">
+    <div class="tabs2">
+      <div class="tab2 active" data-subtab="gastos">Gastos</div>
+      <div class="tab2" data-subtab="retiros">Retiros</div>
+    </div>
+    <div id="sub-gastos">
+      <div class="toolbar"><button class="btn primary" id="btnNewGasto">+ Nuevo gasto</button></div>
+      <div class="table-scroll" id="gastosTableContainer"><div class="loading">Cargando...</div></div>
+    </div>
+    <div id="sub-retiros" style="display:none;">
+      <div class="toolbar"><button class="btn primary" id="btnNewRetiro">+ Nuevo retiro</button></div>
+      <div class="table-scroll" id="retirosTableContainer"><div class="loading">Cargando...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL: Producto/Lote -->
+<div class="modal-overlay" id="modalProducto">
+  <div class="modal">
+    <h2 id="modalProductoTitle">Nuevo producto / lote</h2>
+    <div class="field-row">
+      <div class="field"><label>Código</label><input id="pCodigo" type="text"></div>
+      <div class="field"><label>Lote</label><input id="pLote" type="text" placeholder="Ej. NORMAL, OFERTA..."></div>
+    </div>
+    <div class="field"><label>Repuesto</label><input id="pRepuesto" type="text"></div>
+    <div class="field"><label>Modelo</label><input id="pModelo" type="text"></div>
+    <div class="field-row">
+      <div class="field"><label>Precio SAP $</label><input id="pPrecioSapUsd" type="number" step="0.01"></div>
+      <div class="field"><label>T/C</label><input id="pTc" type="number" step="0.001"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Precio venta (este lote)</label><input id="pPrecioVenta" type="number" step="0.01"></div>
+      <div class="field"><label>PVP</label><input id="pPvp" type="number" step="0.01"></div>
+    </div>
+    <div class="field"><label>Cantidad / Stock inicial</label><input id="pStock" type="number"></div>
+    <div class="field"><label>Fecha del lote</label><input id="pFecha" type="date"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelProducto">Cancelar</button>
+      <button class="btn primary" id="btnSaveProducto">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Entrada -->
+<div class="modal-overlay" id="modalEntrada">
+  <div class="modal">
+    <h2>Registrar entrada</h2>
+    <div class="field"><label>Código y lote existente (o deja en blanco para nuevo)</label>
+      <select id="eLoteExistente"><option value="">— Nuevo lote —</option></select>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Código</label><input id="eCodigo" type="text"></div>
+      <div class="field"><label>Lote</label><input id="eLote" type="text"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Repuesto</label><input id="eRepuestoInfo" type="text" disabled></div>
+      <div class="field"><label>Modelo</label><input id="eModeloInfo" type="text" disabled></div>
+    </div>
+    <div class="field"><label>Fecha</label><input id="eFecha" type="date"></div>
+    <div class="field-row">
+      <div class="field"><label>Precio SAP $</label><input id="ePrecioSapUsd" type="number" step="0.01"></div>
+      <div class="field"><label>T/C (Honda)</label><input id="eTc" type="number" step="0.001"></div>
+    </div>
+    <div class="field"><label>Cantidad</label><input id="eCantidad" type="number"></div>
+    <div class="field"><label>N° Pedido (opcional)</label><input id="eNroPedido" type="text"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelEntrada">Cancelar</button>
+      <button class="btn primary" id="btnSaveEntrada">Registrar entrada</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Salida -->
+<div class="modal-overlay" id="modalSalida">
+  <div class="modal">
+    <h2>Registrar salida</h2>
+    <div class="field"><label>Código</label>
+      <input id="sCodigo" type="text" placeholder="Escribe el código del repuesto">
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Repuesto</label><input id="sRepuestoInfo" type="text" disabled></div>
+      <div class="field"><label>Modelo</label><input id="sModeloInfo" type="text" disabled></div>
+    </div>
+    <div class="field"><label>Stock disponible</label><input id="sStockInfo" type="text" disabled></div>
+    <div class="field"><label>Cantidad</label><input id="sCantidad" type="number"></div>
+    <div class="field">
+      <label>Precio de venta</label>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input id="sPrecioVentaBox" type="number" step="0.01" disabled style="flex:1;">
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; color:var(--text-muted); white-space:nowrap;">
+          <input type="checkbox" id="sPrecioEspecialChk" style="width:16px; height:16px; margin:0;"> Especial
+        </label>
+      </div>
+    </div>
+    <div class="field"><label>Fecha</label><input id="sFecha" type="date"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelSalida">Cancelar</button>
+      <button class="btn primary" id="btnSaveSalida">Registrar salida</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Gasto/Retiro -->
+<div class="modal-overlay" id="modalGR">
+  <div class="modal">
+    <h2 id="modalGRTitle">Nuevo gasto</h2>
+    <div class="field"><label>Fecha</label><input id="grFecha" type="date"></div>
+    <div class="field"><label>Motivo</label><input id="grMotivo" type="text"></div>
+    <div class="field"><label>Monto (S/)</label><input id="grMonto" type="number" step="0.01"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelGR">Cancelar</button>
+      <button class="btn primary" id="btnSaveGR">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar cantidad de movimiento -->
+<div class="modal-overlay" id="modalEditMov">
+  <div class="modal">
+    <h2>Editar cantidad</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin-top:-8px;" id="editMovInfo"></p>
+    <div class="field"><label>Nueva cantidad</label><input id="emCantidad" type="number"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelEditMov">Cancelar</button>
+      <button class="btn primary" id="btnSaveEditMov">Guardar cambio</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CONFIG_KEY_URL = 'inv_honda_weburl';
+const CONFIG_KEY_INV = 'inv_honda_inversion';
+let WEBAPP_URL = localStorage.getItem(CONFIG_KEY_URL) || '';
+
+let DB = { Inventario: [], Movimientos: [], Gastos: [], Retiro: [] };
+let editingProductoId = null;
+let grType = null; // 'Gastos' | 'Retiro'
+let editingGRId = null;
+let editingMovId = null;
+
+function uid(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function money(n) { n = Number(n) || 0; return 'S/ ' + n.toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function toNum(v) {
+  if (typeof v === 'number') return v;
+  if (v === null || v === undefined || v === '') return 0;
+  let s = String(v).trim();
+  if (s.includes(',') && !s.includes('.')) s = s.replace(',', '.');
+  else if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+function todayStr() { return new Date().toISOString().slice(0,10); }
+function dateOnly(v) { if (!v) return ''; v = String(v); return v.includes('T') ? v.slice(0,10) : v; }
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ---------- API ----------
+async function apiGet(sheet) {
+  const res = await fetch(WEBAPP_URL + '?sheet=' + encodeURIComponent(sheet) + '&action=read');
+  const json = await res.json();
+  return json.data || [];
+}
+async function apiPost(sheet, action, id, data) {
+  const res = await fetch(WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ sheet, action, id, data })
+  });
+  const json = await res.json();
+  return json.data || [];
+}
+
+async function loadAll() {
+  if (!WEBAPP_URL) {
+    document.getElementById('connStatus').textContent = 'No conectado. Ve a Configuración.';
+    switchPage('config');
+    return;
+  }
+  try {
+    document.getElementById('connStatus').textContent = 'Conectando...';
+    DB.Inventario = await apiGet('Inventario');
+    DB.Movimientos = await apiGet('Movimientos');
+    DB.Gastos = await apiGet('Gastos');
+    DB.Retiro = await apiGet('Retiro');
+    document.getElementById('connStatus').textContent = '✓ Conectado';
+    renderAll();
+  } catch (err) {
+    document.getElementById('connStatus').textContent = 'Error de conexión. Revisa la URL.';
+    showToast('No se pudo conectar con Google Sheets');
+  }
+}
+
+function renderAll() {
+  renderResumen();
+  renderInventario();
+  renderMovimientos();
+  renderGastos();
+  renderRetiros();
+  refreshCodigoSelects();
+}
+
+// ---------- RESUMEN ----------
+function renderResumen() {
+  const compras = DB.Movimientos.filter(m => m.Tipo === 'Entrada').reduce((s,m) => s + toNum(m.TotalCompra), 0);
+  const ventas = DB.Movimientos.filter(m => m.Tipo === 'Salida').reduce((s,m) => s + toNum(m.TotalVenta), 0);
+  const gastos = DB.Gastos.reduce((s,g) => s + toNum(g.Monto), 0);
+  const retiros = DB.Retiro.reduce((s,r) => s + toNum(r.Monto), 0);
+  const ganBruta = DB.Movimientos.reduce((s,m) => s + toNum(m.Ganancia), 0);
+  const ganNeta = ganBruta - gastos;
+  const inversion = toNum(localStorage.getItem(CONFIG_KEY_INV) || 0);
+  const rentabilidad = inversion ? (ganNeta / inversion * 100) : 0;
+  const valorInv = DB.Inventario.reduce((s,p) => s + (toNum(p.Stock) * toNum(p.PrecioSAP_S)), 0);
+  const saldo = inversion + ventas - compras - gastos - retiros;
+  const capitalReal = valorInv + saldo;
+  const crecimiento = capitalReal - inversion;
+
+  document.getElementById('rInversion').textContent = money(inversion);
+  document.getElementById('rSaldo').textContent = money(saldo);
+  document.getElementById('rCompras').textContent = money(compras);
+  document.getElementById('rVentas').textContent = money(ventas);
+  document.getElementById('rGastos').textContent = money(gastos);
+  document.getElementById('rRetiros').textContent = money(retiros);
+  document.getElementById('rGanBruta').textContent = money(ganBruta);
+  document.getElementById('rGanNeta').textContent = money(ganNeta);
+  document.getElementById('rRent').textContent = rentabilidad.toFixed(1) + '%';
+  document.getElementById('rValorInv').textContent = money(valorInv);
+  document.getElementById('rCapital').textContent = money(capitalReal);
+  document.getElementById('rCrecimiento').textContent = money(crecimiento);
+}
+
+// ---------- INVENTARIO ----------
+function stockStatus(p) {
+  const s = toNum(p.Stock);
+  if (s <= 0) return 'out';
+  if (s <= 3) return 'low';
+  return 'ok';
+}
+function renderInventario() {
+  const container = document.getElementById('invTableContainer');
+  const search = document.getElementById('invSearch').value.toLowerCase().trim();
+  const filter = document.getElementById('invFilter').value;
+  let list = DB.Inventario.filter(p => {
+    const matches = !search || (p.Repuesto||'').toLowerCase().includes(search) || (p.Codigo||'').toLowerCase().includes(search) || (p.Modelo||'').toLowerCase().includes(search);
+    const status = stockStatus(p);
+    const matchesFilter = filter === 'all' || status === filter;
+    return matches && matchesFilter;
+  });
+  if (DB.Inventario.length === 0) {
+    container.innerHTML = '<div class="empty-state">Aún no hay productos. Usa "Nuevo producto / lote" para empezar.</div>';
+    return;
+  }
+  const rows = list.map(p => {
+    const status = stockStatus(p);
+    const badge = status === 'ok' ? '<span class="badge ok">En stock</span>' : status === 'low' ? '<span class="badge low">Stock bajo</span>' : '<span class="badge out">Agotado</span>';
+    return `<tr>
+      <td>${esc(p.Codigo)}</td><td>${esc(p.Lote)}</td><td>${esc(p.Repuesto)}</td><td>${esc(p.Modelo)}</td>
+      <td>$${toNum(p.PrecioSAP_USD).toFixed(2)}</td><td>${toNum(p.TC).toFixed(3)}</td>
+      <td>${money(p.PrecioSAP_S)}</td><td>${money(p.PrecioVenta)}</td><td>${money(p.PVP)}</td>
+      <td>${toNum(p.Stock)}</td><td>${money(toNum(p.Stock)*toNum(p.PrecioSAP_S))}</td><td>${badge}</td>
+      <td><div class="row-actions">
+        <button class="btn small" onclick="openEditProducto('${p.ID}')">Editar</button>
+        <button class="btn small" onclick="deleteProducto('${p.ID}')">Eliminar</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  container.innerHTML = `<table><thead><tr>
+    <th>Código</th><th>Lote</th><th>Repuesto</th><th>Modelo</th><th>P. SAP $</th><th>T/C</th>
+    <th>P. SAP S/</th><th>P. venta</th><th>PVP</th><th>Stock</th><th>Valor IN</th><th>Estado</th><th></th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+}
+function esc(str) { const d = document.createElement('div'); d.textContent = str == null ? '' : str; return d.innerHTML; }
+
+document.getElementById('invSearch').addEventListener('input', renderInventario);
+document.getElementById('invFilter').addEventListener('change', renderInventario);
+
+function openNewProducto() {
+  editingProductoId = null;
+  document.getElementById('modalProductoTitle').textContent = 'Nuevo producto / lote';
+  ['pCodigo','pLote','pRepuesto','pModelo','pPrecioSapUsd','pTc','pPrecioVenta','pPvp','pStock'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('pFecha').value = todayStr();
+  document.getElementById('modalProducto').classList.add('open');
+}
+function openEditProducto(id) {
+  const p = DB.Inventario.find(x => x.ID === id);
+  if (!p) return;
+  editingProductoId = id;
+  document.getElementById('modalProductoTitle').textContent = 'Editar producto / lote';
+  document.getElementById('pCodigo').value = p.Codigo || '';
+  document.getElementById('pLote').value = p.Lote || '';
+  document.getElementById('pRepuesto').value = p.Repuesto || '';
+  document.getElementById('pModelo').value = p.Modelo || '';
+  document.getElementById('pPrecioSapUsd').value = p.PrecioSAP_USD || '';
+  document.getElementById('pTc').value = p.TC || '';
+  document.getElementById('pPrecioVenta').value = p.PrecioVenta || '';
+  document.getElementById('pPvp').value = p.PVP || '';
+  document.getElementById('pStock').value = p.Stock || '';
+  document.getElementById('pFecha').value = dateOnly(p.FechaLote) || todayStr();
+  document.getElementById('modalProducto').classList.add('open');
+}
+document.getElementById('btnNewProducto').addEventListener('click', openNewProducto);
+document.getElementById('btnCancelProducto').addEventListener('click', () => document.getElementById('modalProducto').classList.remove('open'));
+
+document.getElementById('btnSaveProducto').addEventListener('click', async () => {
+  const codigo = document.getElementById('pCodigo').value.trim();
+  const lote = document.getElementById('pLote').value.trim();
+  if (!codigo || !lote) { showToast('Código y Lote son obligatorios'); return; }
+  const psapUsd = toNum(document.getElementById('pPrecioSapUsd').value);
+  const tc = toNum(document.getElementById('pTc').value);
+  const data = {
+    Codigo: codigo, Lote: lote,
+    FechaLote: document.getElementById('pFecha').value,
+    Repuesto: document.getElementById('pRepuesto').value.trim(),
+    Modelo: document.getElementById('pModelo').value.trim(),
+    PrecioSAP_USD: psapUsd, TC: tc, PrecioSAP_S: Math.round(psapUsd*tc*100)/100,
+    PrecioVenta: toNum(document.getElementById('pPrecioVenta').value),
+    PVP: toNum(document.getElementById('pPvp').value),
+    Stock: toNum(document.getElementById('pStock').value)
+  };
+  if (editingProductoId) {
+    await apiPost('Inventario', 'update', editingProductoId, data);
+  } else {
+    data.ID = codigo + '|' + lote;
+    await apiPost('Inventario', 'add', null, data);
+  }
+  document.getElementById('modalProducto').classList.remove('open');
+  await loadAll();
+  showToast('Guardado');
+});
+
+async function deleteProducto(id) {
+  if (!confirm('¿Eliminar este producto/lote del inventario?')) return;
+  await apiPost('Inventario', 'delete', id, {});
+  await loadAll();
+  showToast('Eliminado');
+}
+
+// ---------- MOVIMIENTOS ----------
+function renderMovimientos() {
+  const container = document.getElementById('movTableContainer');
+  if (DB.Movimientos.length === 0) {
+    container.innerHTML = '<div class="empty-state">Aún no hay movimientos registrados.</div>';
+    return;
+  }
+  const sorted = [...DB.Movimientos].sort((a,b) => (b.Fecha||'').localeCompare(a.Fecha||''));
+  const rows = sorted.map(m => {
+    const badge = m.Tipo === 'Entrada' ? '<span class="badge in">Entrada</span>' : '<span class="badge outmov">Salida</span>';
+    return `<tr>
+      <td>${esc(dateOnly(m.Fecha))}</td><td>${badge}</td><td>${esc(m.Codigo)}</td><td>${esc(m.Lote)}</td>
+      <td>${esc(m.Repuesto)}</td><td>${esc(m.Modelo)}</td><td>${toNum(m.Cantidad)}</td>
+      <td>${m.PrecioCompra ? money(m.PrecioCompra) : '—'}</td><td>${m.PrecioVenta ? money(m.PrecioVenta) : '—'}</td>
+      <td>${m.TotalCompra ? money(m.TotalCompra) : '—'}</td><td>${m.TotalVenta ? money(m.TotalVenta) : '—'}</td>
+      <td>${m.Ganancia ? money(m.Ganancia) : '—'}</td><td>${esc(m.NroPedido)}</td>
+      <td><div class="row-actions">
+        <button class="btn small" onclick="openEditMov('${m.ID}')">Editar cant.</button>
+        <button class="btn small" onclick="deleteMov('${m.ID}')">Eliminar</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  container.innerHTML = `<table><thead><tr>
+    <th>Fecha</th><th>Tipo</th><th>Código</th><th>Lote</th><th>Repuesto</th><th>Modelo</th><th>Cant.</th>
+    <th>P. compra</th><th>P. venta</th><th>Total compra</th><th>Total venta</th><th>Ganancia</th><th>N° Pedido</th><th></th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function refreshCodigoSelects() {
+  const eSel = document.getElementById('eLoteExistente');
+  eSel.innerHTML = '<option value="">— Nuevo lote —</option>' + DB.Inventario.map(p => `<option value="${p.ID}">${esc(p.Codigo)} | ${esc(p.Lote)} - ${esc(p.Repuesto)}</option>`).join('');
+}
+
+function findByCodigo(codigo) {
+  return DB.Inventario.find(p => (p.Codigo||'').toLowerCase() === (codigo||'').toLowerCase());
+}
+
+// Entrada modal
+document.getElementById('btnNewEntrada').addEventListener('click', () => {
+  ['eCodigo','eLote','ePrecioSapUsd','eTc','eCantidad','eNroPedido'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('eRepuestoInfo').value = '';
+  document.getElementById('eModeloInfo').value = '';
+  document.getElementById('eFecha').value = todayStr();
+  document.getElementById('eLoteExistente').value = '';
+  document.getElementById('modalEntrada').classList.add('open');
+});
+document.getElementById('btnCancelEntrada').addEventListener('click', () => document.getElementById('modalEntrada').classList.remove('open'));
+document.getElementById('eLoteExistente').addEventListener('change', (e) => {
+  const id = e.target.value;
+  if (!id) { document.getElementById('eCodigo').value=''; document.getElementById('eLote').value=''; document.getElementById('eRepuestoInfo').value=''; document.getElementById('eModeloInfo').value=''; return; }
+  const p = DB.Inventario.find(x => x.ID === id);
+  if (p) { document.getElementById('eCodigo').value = p.Codigo; document.getElementById('eLote').value = p.Lote; document.getElementById('eRepuestoInfo').value = p.Repuesto; document.getElementById('eModeloInfo').value = p.Modelo; }
+});
+document.getElementById('eCodigo').addEventListener('input', (e) => {
+  const p = findByCodigo(e.target.value.trim());
+  document.getElementById('eRepuestoInfo').value = p ? p.Repuesto : '';
+  document.getElementById('eModeloInfo').value = p ? p.Modelo : '';
+});
+
+document.getElementById('btnSaveEntrada').addEventListener('click', async () => {
+  const codigo = document.getElementById('eCodigo').value.trim();
+  const lote = document.getElementById('eLote').value.trim();
+  const cantidad = toNum(document.getElementById('eCantidad').value);
+  if (!codigo || !lote || cantidad <= 0) { showToast('Completa código, lote y cantidad'); return; }
+  const psapUsd = toNum(document.getElementById('ePrecioSapUsd').value);
+  const tc = toNum(document.getElementById('eTc').value);
+  const precioCompra = Math.round(psapUsd*tc*100)/100;
+  const fecha = document.getElementById('eFecha').value;
+  const id = codigo + '|' + lote;
+  let existing = DB.Inventario.find(p => p.ID === id);
+
+  if (existing) {
+    await apiPost('Inventario', 'update', id, { Stock: toNum(existing.Stock) + cantidad, PrecioSAP_USD: psapUsd, TC: tc, PrecioSAP_S: precioCompra });
+  } else {
+    // buscar Repuesto/Modelo/PrecioVenta/PVP de otro lote del mismo codigo, si existe
+    const sibling = DB.Inventario.find(p => p.Codigo === codigo);
+    await apiPost('Inventario', 'add', null, {
+      ID: id, Codigo: codigo, Lote: lote, FechaLote: fecha,
+      Repuesto: sibling ? sibling.Repuesto : codigo,
+      Modelo: sibling ? sibling.Modelo : '',
+      PrecioSAP_USD: psapUsd, TC: tc, PrecioSAP_S: precioCompra,
+      PrecioVenta: sibling ? sibling.PrecioVenta : 0,
+      PVP: sibling ? sibling.PVP : 0,
+      Stock: cantidad
+    });
+  }
+
+  const invRow = existing || DB.Inventario.find(p => p.Codigo === codigo) || {};
+  await apiPost('Movimientos', 'add', null, {
+    ID: uid('M'), Fecha: fecha, Tipo: 'Entrada', Lote: lote, Codigo: codigo,
+    Modelo: invRow.Modelo || '', Repuesto: invRow.Repuesto || '',
+    PrecioSAP: psapUsd, TC: tc, PrecioCompra: precioCompra, PrecioVenta: '',
+    Cantidad: cantidad, TotalCompra: Math.round(precioCompra*cantidad*100)/100, TotalVenta: '', Ganancia: 0,
+    NroPedido: document.getElementById('eNroPedido').value.trim(), PrecioEspecial: 'FALSE'
+  });
+
+  document.getElementById('modalEntrada').classList.remove('open');
+  await loadAll();
+  showToast('Entrada registrada');
+});
+
+// Salida modal
+document.getElementById('btnNewSalida').addEventListener('click', () => {
+  document.getElementById('sCodigo').value = '';
+  document.getElementById('sRepuestoInfo').value = '';
+  document.getElementById('sModeloInfo').value = '';
+  document.getElementById('sStockInfo').value = '';
+  document.getElementById('sCantidad').value = '';
+  document.getElementById('sPrecioEspecialChk').checked = false;
+  document.getElementById('sPrecioVentaBox').disabled = true;
+  document.getElementById('sPrecioVentaBox').value = '';
+  document.getElementById('sFecha').value = todayStr();
+  document.getElementById('modalSalida').classList.add('open');
+});
+document.getElementById('btnCancelSalida').addEventListener('click', () => document.getElementById('modalSalida').classList.remove('open'));
+document.getElementById('sCodigo').addEventListener('input', updateStockInfo);
+function updateStockInfo() {
+  const codigo = document.getElementById('sCodigo').value.trim();
+  const lotes = DB.Inventario.filter(p => (p.Codigo||'').toLowerCase() === codigo.toLowerCase());
+  const total = lotes.reduce((s,p) => s + toNum(p.Stock), 0);
+  document.getElementById('sStockInfo').value = codigo ? (total + ' unidades disponibles (todos los lotes)') : '';
+  const primero = lotes.filter(p => toNum(p.Stock) > 0).sort((a,b) => dateOnly(a.FechaLote).localeCompare(dateOnly(b.FechaLote)))[0] || lotes[0];
+  document.getElementById('sRepuestoInfo').value = primero ? primero.Repuesto : '';
+  document.getElementById('sModeloInfo').value = primero ? primero.Modelo : '';
+  if (!document.getElementById('sPrecioEspecialChk').checked) {
+    document.getElementById('sPrecioVentaBox').value = primero ? primero.PrecioVenta : '';
+  }
+}
+document.getElementById('sPrecioEspecialChk').addEventListener('change', (e) => {
+  document.getElementById('sPrecioVentaBox').disabled = !e.target.checked;
+  if (!e.target.checked) updateStockInfo();
+});
+
+document.getElementById('btnSaveSalida').addEventListener('click', async () => {
+  const codigo = document.getElementById('sCodigo').value.trim();
+  let cantidad = toNum(document.getElementById('sCantidad').value);
+  const fecha = document.getElementById('sFecha').value;
+  const especial = document.getElementById('sPrecioEspecialChk').checked;
+  const precioEspecial = toNum(document.getElementById('sPrecioVentaBox').value);
+  if (!codigo || cantidad <= 0) { showToast('Completa código y cantidad'); return; }
+
+  // FIFO: lotes de ese codigo con stock > 0, ordenados por FechaLote ascendente
+  let lotes = DB.Inventario.filter(p => (p.Codigo||'').toLowerCase() === codigo.toLowerCase() && toNum(p.Stock) > 0)
+    .sort((a,b) => dateOnly(a.FechaLote).localeCompare(dateOnly(b.FechaLote)));
+
+  if (lotes.length === 0) { showToast('No se encontró ese código con stock disponible'); return; }
+
+  const totalDisponible = lotes.reduce((s,p) => s + toNum(p.Stock), 0);
+  if (cantidad > totalDisponible) {
+    if (!confirm('La cantidad supera el stock disponible (' + totalDisponible + '). ¿Continuar de todos modos?')) return;
+  }
+
+  let restante = cantidad;
+  for (const lote of lotes) {
+    if (restante <= 0) break;
+    const stockLote = toNum(lote.Stock);
+    const consumo = Math.min(stockLote, restante);
+    restante -= consumo;
+    const precioVenta = especial ? precioEspecial : toNum(lote.PrecioVenta);
+    const ganancia = Math.round((precioVenta - toNum(lote.PrecioSAP_S)) * consumo * 100) / 100;
+
+    await apiPost('Inventario', 'update', lote.ID, { Stock: stockLote - consumo });
+    await apiPost('Movimientos', 'add', null, {
+      ID: uid('M'), Fecha: fecha, Tipo: 'Salida', Lote: lote.Lote, Codigo: lote.Codigo,
+      Modelo: lote.Modelo, Repuesto: lote.Repuesto,
+      PrecioSAP: lote.PrecioSAP_USD, TC: lote.TC, PrecioCompra: lote.PrecioSAP_S, PrecioVenta: precioVenta,
+      Cantidad: consumo, TotalCompra: '', TotalVenta: Math.round(precioVenta*consumo*100)/100, Ganancia: ganancia,
+      NroPedido: '', PrecioEspecial: especial ? 'TRUE' : 'FALSE'
+    });
+  }
+
+  document.getElementById('modalSalida').classList.remove('open');
+  await loadAll();
+  showToast('Salida registrada');
+});
+
+// Editar / eliminar movimiento
+function openEditMov(id) {
+  const m = DB.Movimientos.find(x => x.ID === id);
+  if (!m) return;
+  editingMovId = id;
+  document.getElementById('editMovInfo').textContent = `${m.Tipo} · ${m.Codigo} · ${m.Repuesto} (cantidad actual: ${toNum(m.Cantidad)})`;
+  document.getElementById('emCantidad').value = toNum(m.Cantidad);
+  document.getElementById('modalEditMov').classList.add('open');
+}
+document.getElementById('btnCancelEditMov').addEventListener('click', () => document.getElementById('modalEditMov').classList.remove('open'));
+document.getElementById('btnSaveEditMov').addEventListener('click', async () => {
+  const m = DB.Movimientos.find(x => x.ID === editingMovId);
+  if (!m) return;
+  const nuevaCantidad = toNum(document.getElementById('emCantidad').value);
+  if (nuevaCantidad <= 0) { showToast('La cantidad debe ser mayor a 0'); return; }
+  const cantidadAnterior = toNum(m.Cantidad);
+  const delta = nuevaCantidad - cantidadAnterior;
+
+  // Ajustar stock del lote correspondiente
+  const lote = DB.Inventario.find(p => p.Codigo === m.Codigo && p.Lote === m.Lote);
+  if (lote) {
+    const ajuste = m.Tipo === 'Entrada' ? delta : -delta;
+    await apiPost('Inventario', 'update', lote.ID, { Stock: toNum(lote.Stock) + ajuste });
+  }
+
+  // Recalcular totales del movimiento
+  const data = { Cantidad: nuevaCantidad };
+  if (m.Tipo === 'Entrada') {
+    data.TotalCompra = Math.round(toNum(m.PrecioCompra) * nuevaCantidad * 100) / 100;
+  } else {
+    data.TotalVenta = Math.round(toNum(m.PrecioVenta) * nuevaCantidad * 100) / 100;
+    data.Ganancia = Math.round((toNum(m.PrecioVenta) - toNum(m.PrecioCompra)) * nuevaCantidad * 100) / 100;
+  }
+  await apiPost('Movimientos', 'update', editingMovId, data);
+
+  document.getElementById('modalEditMov').classList.remove('open');
+  await loadAll();
+  showToast('Cantidad actualizada');
+});
+
+async function deleteMov(id) {
+  const m = DB.Movimientos.find(x => x.ID === id);
+  if (!m) return;
+  if (!confirm(`¿Eliminar este movimiento de ${m.Tipo.toLowerCase()} (${m.Repuesto}, cantidad ${toNum(m.Cantidad)})? Esto también ajustará el stock.`)) return;
+
+  const lote = DB.Inventario.find(p => p.Codigo === m.Codigo && p.Lote === m.Lote);
+  if (lote) {
+    const ajuste = m.Tipo === 'Entrada' ? -toNum(m.Cantidad) : toNum(m.Cantidad);
+    await apiPost('Inventario', 'update', lote.ID, { Stock: toNum(lote.Stock) + ajuste });
+  }
+  await apiPost('Movimientos', 'delete', id, {});
+  await loadAll();
+  showToast('Movimiento eliminado');
+}
+
+// ---------- GASTOS / RETIROS ----------
+document.querySelectorAll('.tab2').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab2').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('sub-gastos').style.display = tab.dataset.subtab === 'gastos' ? 'block' : 'none';
+    document.getElementById('sub-retiros').style.display = tab.dataset.subtab === 'retiros' ? 'block' : 'none';
+  });
+});
+
+function renderGRTable(list, containerId, sheet) {
+  const container = document.getElementById(containerId);
+  if (list.length === 0) { container.innerHTML = '<div class="empty-state">Sin registros aún.</div>'; return; }
+  const sorted = [...list].sort((a,b) => (b.Fecha||'').localeCompare(a.Fecha||''));
+  const rows = sorted.map(r => `<tr>
+    <td>${esc(dateOnly(r.Fecha))}</td><td>${esc(r.Motivo)}</td><td>${money(r.Monto)}</td>
+    <td><div class="row-actions">
+      <button class="btn small" onclick="openEditGR('${sheet}','${r.ID}')">Editar</button>
+      <button class="btn small" onclick="deleteGR('${sheet}','${r.ID}')">Eliminar</button>
+    </div></td>
+  </tr>`).join('');
+  container.innerHTML = `<table><thead><tr><th>Fecha</th><th>Motivo</th><th>Monto</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function renderGastos() { renderGRTable(DB.Gastos, 'gastosTableContainer', 'Gastos'); }
+function renderRetiros() { renderGRTable(DB.Retiro, 'retirosTableContainer', 'Retiro'); }
+
+document.getElementById('btnNewGasto').addEventListener('click', () => openNewGR('Gastos'));
+document.getElementById('btnNewRetiro').addEventListener('click', () => openNewGR('Retiro'));
+function openNewGR(sheet) {
+  grType = sheet; editingGRId = null;
+  document.getElementById('modalGRTitle').textContent = sheet === 'Gastos' ? 'Nuevo gasto' : 'Nuevo retiro';
+  document.getElementById('grFecha').value = todayStr();
+  document.getElementById('grMotivo').value = '';
+  document.getElementById('grMonto').value = '';
+  document.getElementById('modalGR').classList.add('open');
+}
+function openEditGR(sheet, id) {
+  const list = DB[sheet];
+  const r = list.find(x => x.ID === id);
+  if (!r) return;
+  grType = sheet; editingGRId = id;
+  document.getElementById('modalGRTitle').textContent = sheet === 'Gastos' ? 'Editar gasto' : 'Editar retiro';
+  document.getElementById('grFecha').value = dateOnly(r.Fecha);
+  document.getElementById('grMotivo').value = r.Motivo;
+  document.getElementById('grMonto').value = r.Monto;
+  document.getElementById('modalGR').classList.add('open');
+}
+document.getElementById('btnCancelGR').addEventListener('click', () => document.getElementById('modalGR').classList.remove('open'));
+document.getElementById('btnSaveGR').addEventListener('click', async () => {
+  const data = { Fecha: document.getElementById('grFecha').value, Motivo: document.getElementById('grMotivo').value.trim(), Monto: toNum(document.getElementById('grMonto').value) };
+  if (editingGRId) {
+    await apiPost(grType, 'update', editingGRId, data);
+  } else {
+    data.ID = uid(grType === 'Gastos' ? 'G' : 'R');
+    await apiPost(grType, 'add', null, data);
+  }
+  document.getElementById('modalGR').classList.remove('open');
+  await loadAll();
+  showToast('Guardado');
+});
+async function deleteGR(sheet, id) {
+  if (!confirm('¿Eliminar este registro?')) return;
+  await apiPost(sheet, 'delete', id, {});
+  await loadAll();
+  showToast('Eliminado');
+}
+
+// ---------- NAV ----------
+document.querySelectorAll('.nav button').forEach(btn => {
+  btn.addEventListener('click', () => switchPage(btn.dataset.page));
+});
+function switchPage(page) {
+  document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + page));
+}
+
+// ---------- CONFIG ----------
+document.getElementById('webAppUrl').value = WEBAPP_URL;
+document.getElementById('inversionInput').value = localStorage.getItem(CONFIG_KEY_INV) || '';
+document.getElementById('btnSaveUrl').addEventListener('click', () => {
+  WEBAPP_URL = document.getElementById('webAppUrl').value.trim();
+  localStorage.setItem(CONFIG_KEY_URL, WEBAPP_URL);
+  loadAll();
+});
+document.getElementById('btnSaveInversion').addEventListener('click', () => {
+  localStorage.setItem(CONFIG_KEY_INV, document.getElementById('inversionInput').value);
+  renderResumen();
+  showToast('Inversión guardada');
+});
+
+// init
+loadAll();
+</script>
+</body>
+</html>
