@@ -393,7 +393,9 @@ async function apiPost(sheet, action, id, data) {
     body: JSON.stringify({ sheet, action, id, data })
   });
   const json = await res.json();
-  return json.data || [];
+  const fresh = json.data || [];
+  DB[sheet] = fresh; // mantiene el estado local al día sin recargar todo
+  return fresh;
 }
 
 async function loadAll() {
@@ -404,10 +406,10 @@ async function loadAll() {
   }
   try {
     document.getElementById('connStatus').textContent = 'Conectando...';
-    DB.Inventario = await apiGet('Inventario');
-    DB.Movimientos = await apiGet('Movimientos');
-    DB.Gastos = await apiGet('Gastos');
-    DB.Retiro = await apiGet('Retiro');
+    const [inv, mov, gas, ret] = await Promise.all([
+      apiGet('Inventario'), apiGet('Movimientos'), apiGet('Gastos'), apiGet('Retiro')
+    ]);
+    DB.Inventario = inv; DB.Movimientos = mov; DB.Gastos = gas; DB.Retiro = ret;
     document.getElementById('connStatus').textContent = '✓ Conectado';
     renderAll();
   } catch (err) {
@@ -415,6 +417,7 @@ async function loadAll() {
     showToast('No se pudo conectar con Google Sheets');
   }
 }
+
 
 function renderAll() {
   renderResumen();
@@ -549,14 +552,14 @@ document.getElementById('btnSaveProducto').addEventListener('click', async () =>
     await apiPost('Inventario', 'add', null, data);
   }
   document.getElementById('modalProducto').classList.remove('open');
-  await loadAll();
+  renderAll();
   showToast('Guardado');
 });
 
 async function deleteProducto(id) {
   if (!confirm('¿Eliminar este producto/lote del inventario?')) return;
   await apiPost('Inventario', 'delete', id, {});
-  await loadAll();
+  renderAll();
   showToast('Eliminado');
 }
 
@@ -657,7 +660,7 @@ document.getElementById('btnSaveEntrada').addEventListener('click', async () => 
   });
 
   document.getElementById('modalEntrada').classList.remove('open');
-  await loadAll();
+  renderAll();
   showToast('Entrada registrada');
 });
 
@@ -732,7 +735,7 @@ document.getElementById('btnSaveSalida').addEventListener('click', async () => {
   }
 
   document.getElementById('modalSalida').classList.remove('open');
-  await loadAll();
+  renderAll();
   showToast('Salida registrada');
 });
 
@@ -772,7 +775,7 @@ document.getElementById('btnSaveEditMov').addEventListener('click', async () => 
   await apiPost('Movimientos', 'update', editingMovId, data);
 
   document.getElementById('modalEditMov').classList.remove('open');
-  await loadAll();
+  renderAll();
   showToast('Cantidad actualizada');
 });
 
@@ -787,7 +790,7 @@ async function deleteMov(id) {
     await apiPost('Inventario', 'update', lote.ID, { Stock: toNum(lote.Stock) + ajuste });
   }
   await apiPost('Movimientos', 'delete', id, {});
-  await loadAll();
+  renderAll();
   showToast('Movimiento eliminado');
 }
 
@@ -848,13 +851,13 @@ document.getElementById('btnSaveGR').addEventListener('click', async () => {
     await apiPost(grType, 'add', null, data);
   }
   document.getElementById('modalGR').classList.remove('open');
-  await loadAll();
+  renderAll();
   showToast('Guardado');
 });
 async function deleteGR(sheet, id) {
   if (!confirm('¿Eliminar este registro?')) return;
   await apiPost(sheet, 'delete', id, {});
-  await loadAll();
+  renderAll();
   showToast('Eliminado');
 }
 
