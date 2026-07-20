@@ -213,7 +213,16 @@
       <button class="btn primary" id="btnNewEntrada">+ Registrar entrada</button>
       <button class="btn" id="btnNewSalida" style="border-color:var(--red); color:var(--red);">+ Registrar salida</button>
     </div>
-    <div class="table-scroll" id="movTableContainer"><div class="loading">Cargando movimientos...</div></div>
+    <div class="tabs2">
+      <div class="tab2 active" data-movtab="entradas">Entradas</div>
+      <div class="tab2" data-movtab="salidas">Salidas</div>
+    </div>
+    <div id="sub-mov-entradas">
+      <div class="table-scroll" id="movEntradasContainer"><div class="loading">Cargando entradas...</div></div>
+    </div>
+    <div id="sub-mov-salidas" style="display:none;">
+      <div class="table-scroll" id="movSalidasContainer"><div class="loading">Cargando salidas...</div></div>
+    </div>
   </div>
 
   <!-- GASTOS Y RETIROS -->
@@ -565,31 +574,61 @@ async function deleteProducto(id) {
 
 // ---------- MOVIMIENTOS ----------
 function renderMovimientos() {
-  const container = document.getElementById('movTableContainer');
-  if (DB.Movimientos.length === 0) {
-    container.innerHTML = '<div class="empty-state">Aún no hay movimientos registrados.</div>';
+  const sorted = [...DB.Movimientos].reverse().sort((a,b) => dateOnly(b.Fecha||'').localeCompare(dateOnly(a.Fecha||'')));
+  renderEntradasTable(sorted.filter(m => m.Tipo === 'Entrada'));
+  renderSalidasTable(sorted.filter(m => m.Tipo === 'Salida'));
+}
+
+function renderEntradasTable(list) {
+  const container = document.getElementById('movEntradasContainer');
+  if (list.length === 0) {
+    container.innerHTML = '<div class="empty-state">Aún no hay entradas registradas.</div>';
     return;
   }
-  const sorted = [...DB.Movimientos].reverse().sort((a,b) => dateOnly(b.Fecha||'').localeCompare(dateOnly(a.Fecha||'')));
-  const rows = sorted.map(m => {
-    const badge = m.Tipo === 'Entrada' ? '<span class="badge in">Entrada</span>' : '<span class="badge outmov">Salida</span>';
-    return `<tr>
-      <td>${esc(dateOnly(m.Fecha))}</td><td>${badge}</td><td>${esc(m.Codigo)}</td><td>${esc(m.Lote)}</td>
-      <td>${esc(m.Repuesto)}</td><td>${esc(m.Modelo)}</td><td>${toNum(m.Cantidad)}</td>
-      <td>${m.PrecioCompra ? money(m.PrecioCompra) : '—'}</td><td>${m.PrecioVenta ? money(m.PrecioVenta) : '—'}</td>
-      <td>${m.TotalCompra ? money(m.TotalCompra) : '—'}</td><td>${m.TotalVenta ? money(m.TotalVenta) : '—'}</td>
-      <td>${m.Ganancia ? money(m.Ganancia) : '—'}</td><td>${esc(m.NroPedido)}</td>
+  const rows = list.map(m => `<tr>
+      <td>${esc(dateOnly(m.Fecha))}</td><td>${esc(m.Codigo)}</td><td>${esc(m.Repuesto)}</td><td>${esc(m.Modelo)}</td>
+      <td>${esc(m.Lote)}</td><td>${toNum(m.Cantidad)}</td><td>${toNum(m.TC).toFixed(3)}</td>
+      <td>${money(m.PrecioCompra)}</td><td>${money(m.TotalCompra)}</td><td>${esc(m.NroPedido)}</td>
       <td><div class="row-actions">
         <button class="btn small" onclick="openEditMov('${m.ID}')">Editar cant.</button>
         <button class="btn small" onclick="deleteMov('${m.ID}')">Eliminar</button>
       </div></td>
-    </tr>`;
-  }).join('');
+    </tr>`).join('');
   container.innerHTML = `<table><thead><tr>
-    <th>Fecha</th><th>Tipo</th><th>Código</th><th>Lote</th><th>Repuesto</th><th>Modelo</th><th>Cant.</th>
-    <th>P. compra</th><th>P. venta</th><th>Total compra</th><th>Total venta</th><th>Ganancia</th><th>N° Pedido</th><th></th>
+    <th>Fecha</th><th>Código</th><th>Repuesto</th><th>Modelo</th><th>Lote</th><th>Cant.</th>
+    <th>T/C</th><th>P. compra</th><th>Total compra</th><th>N° Pedido</th><th></th>
   </tr></thead><tbody>${rows}</tbody></table>`;
 }
+
+function renderSalidasTable(list) {
+  const container = document.getElementById('movSalidasContainer');
+  if (list.length === 0) {
+    container.innerHTML = '<div class="empty-state">Aún no hay salidas registradas.</div>';
+    return;
+  }
+  const rows = list.map(m => `<tr>
+      <td>${esc(dateOnly(m.Fecha))}</td><td>${esc(m.Codigo)}</td><td>${esc(m.Repuesto)}</td><td>${esc(m.Modelo)}</td>
+      <td>${esc(m.Lote)}</td><td>${toNum(m.Cantidad)}</td>
+      <td>${money(m.PrecioVenta)}</td><td>${money(m.TotalVenta)}</td><td>${money(m.Ganancia)}</td>
+      <td><div class="row-actions">
+        <button class="btn small" onclick="openEditMov('${m.ID}')">Editar cant.</button>
+        <button class="btn small" onclick="deleteMov('${m.ID}')">Eliminar</button>
+      </div></td>
+    </tr>`).join('');
+  container.innerHTML = `<table><thead><tr>
+    <th>Fecha</th><th>Código</th><th>Repuesto</th><th>Modelo</th><th>Lote</th><th>Cant.</th>
+    <th>P. venta</th><th>Total venta</th><th>Ganancia</th><th></th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+document.querySelectorAll('[data-movtab]').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('[data-movtab]').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('sub-mov-entradas').style.display = tab.dataset.movtab === 'entradas' ? 'block' : 'none';
+    document.getElementById('sub-mov-salidas').style.display = tab.dataset.movtab === 'salidas' ? 'block' : 'none';
+  });
+});
 
 function refreshCodigoSelects() {
   const eSel = document.getElementById('eLoteExistente');
