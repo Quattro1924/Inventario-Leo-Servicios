@@ -360,6 +360,7 @@
 
 <script>
 const CONFIG_KEY_URL = 'inv_honda_weburl';
+const DEFAULT_INVERSION = 2000;
 const CONFIG_KEY_INV = 'inv_honda_inversion';
 const DEFAULT_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwIRnVPgmyIGao8xS8LQN4lwNgSYm6WP-AMMPa6lqoduA2q-rKweSivBTRFP2ztuYFI/exec';
 let WEBAPP_URL = localStorage.getItem(CONFIG_KEY_URL) || DEFAULT_WEBAPP_URL;
@@ -446,7 +447,7 @@ function renderResumen() {
   const retiros = DB.Retiro.reduce((s,r) => s + toNum(r.Monto), 0);
   const ganBruta = DB.Movimientos.reduce((s,m) => s + toNum(m.Ganancia), 0);
   const ganNeta = ganBruta - gastos;
-  const inversion = toNum(localStorage.getItem(CONFIG_KEY_INV) || 0);
+  const inversion = toNum(localStorage.getItem(CONFIG_KEY_INV) || DEFAULT_INVERSION);
   const rentabilidad = inversion ? (ganNeta / inversion * 100) : 0;
   const valorInv = DB.Inventario.reduce((s,p) => s + (toNum(p.Stock) * toNum(p.PrecioSAP_S)), 0);
   const saldo = inversion + ventas - compras - gastos - retiros;
@@ -912,7 +913,7 @@ function switchPage(page) {
 
 // ---------- CONFIG ----------
 document.getElementById('webAppUrl').value = WEBAPP_URL;
-document.getElementById('inversionInput').value = localStorage.getItem(CONFIG_KEY_INV) || '';
+document.getElementById('inversionInput').value = localStorage.getItem(CONFIG_KEY_INV) || DEFAULT_INVERSION;
 document.getElementById('btnSaveUrl').addEventListener('click', () => {
   WEBAPP_URL = document.getElementById('webAppUrl').value.trim();
   localStorage.setItem(CONFIG_KEY_URL, WEBAPP_URL);
