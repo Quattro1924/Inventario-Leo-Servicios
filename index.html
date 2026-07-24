@@ -361,7 +361,8 @@
 <script>
 const CONFIG_KEY_URL = 'inv_honda_weburl';
 const CONFIG_KEY_INV = 'inv_honda_inversion';
-let WEBAPP_URL = localStorage.getItem(CONFIG_KEY_URL) || '';
+const DEFAULT_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwIRnVPgmyIGao8xS8LQN4lwNgSYm6WP-AMMPa6lqoduA2q-rKweSivBTRFP2ztuYFI/exec';
+let WEBAPP_URL = localStorage.getItem(CONFIG_KEY_URL) || DEFAULT_WEBAPP_URL;
 
 let DB = { Inventario: [], Movimientos: [], Gastos: [], Retiro: [] };
 let editingProductoId = null;
