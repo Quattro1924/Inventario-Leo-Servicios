@@ -274,12 +274,16 @@
 <div class="modal-overlay" id="modalEntrada">
   <div class="modal">
     <h2>Registrar entrada</h2>
-    <div class="field"><label>Código y lote existente (o deja en blanco para nuevo)</label>
-      <select id="eLoteExistente"><option value="">— Nuevo lote —</option></select>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Código</label><input id="eCodigo" type="text"></div>
-      <div class="field"><label>Lote</label><input id="eLote" type="text"></div>
+    <div class="field"><label>Código</label><input id="eCodigo" type="text" placeholder="Escribe el código del repuesto"></div>
+    <div class="field">
+      <label>Lote</label>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <select id="eLoteSelect" style="flex:1;"><option value="">— Selecciona un lote —</option></select>
+        <input id="eLoteNuevo" type="text" placeholder="Nombre del nuevo lote" style="flex:1; display:none;">
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; color:var(--text-muted); white-space:nowrap;">
+          <input type="checkbox" id="eNuevoLoteChk" style="width:16px; height:16px; margin:0;"> Nuevo lote
+        </label>
+      </div>
     </div>
     <div class="field-row">
       <div class="field"><label>Repuesto</label><input id="eRepuestoInfo" type="text" disabled></div>
@@ -633,41 +637,97 @@ document.querySelectorAll('[data-movtab]').forEach(tab => {
 });
 
 function refreshCodigoSelects() {
-  const eSel = document.getElementById('eLoteExistente');
-  eSel.innerHTML = '<option value="">— Nuevo lote —</option>' + DB.Inventario.map(p => `<option value="${p.ID}">${esc(p.Codigo)} | ${esc(p.Lote)} - ${esc(p.Repuesto)}</option>`).join('');
+  // ya no hace falta poblar nada de antemano; el desplegable de Lote se arma al escribir el Código
 }
 
 function findByCodigo(codigo) {
   return DB.Inventario.find(p => (p.Codigo||'').toLowerCase() === (codigo||'').toLowerCase());
 }
+function lotesDeCodigo(codigo) {
+  return DB.Inventario.filter(p => (p.Codigo||'').toLowerCase() === (codigo||'').toLowerCase());
+}
 
 // Entrada modal
 document.getElementById('btnNewEntrada').addEventListener('click', () => {
-  ['eCodigo','eLote','ePrecioSapUsd','eTc','eCantidad','eNroPedido'].forEach(id => document.getElementById(id).value = '');
+  ['eCodigo','ePrecioSapUsd','eTc','eCantidad','eNroPedido','eLoteNuevo'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('eRepuestoInfo').value = '';
   document.getElementById('eModeloInfo').value = '';
+  document.getElementById('eRepuestoInfo').disabled = true;
+  document.getElementById('eModeloInfo').disabled = true;
   document.getElementById('eFecha').value = todayStr();
-  document.getElementById('eLoteExistente').value = '';
+  document.getElementById('eLoteSelect').innerHTML = '<option value="">— Selecciona un lote —</option>';
+  document.getElementById('eLoteSelect').style.display = '';
+  document.getElementById('eLoteNuevo').style.display = 'none';
+  document.getElementById('eNuevoLoteChk').checked = false;
   document.getElementById('modalEntrada').classList.add('open');
 });
 document.getElementById('btnCancelEntrada').addEventListener('click', () => document.getElementById('modalEntrada').classList.remove('open'));
-document.getElementById('eLoteExistente').addEventListener('change', (e) => {
-  const id = e.target.value;
-  if (!id) { document.getElementById('eCodigo').value=''; document.getElementById('eLote').value=''; document.getElementById('eRepuestoInfo').value=''; document.getElementById('eModeloInfo').value=''; return; }
-  const p = DB.Inventario.find(x => x.ID === id);
-  if (p) { document.getElementById('eCodigo').value = p.Codigo; document.getElementById('eLote').value = p.Lote; document.getElementById('eRepuestoInfo').value = p.Repuesto; document.getElementById('eModeloInfo').value = p.Modelo; }
+
+function actualizarLotesEntrada() {
+  const codigo = document.getElementById('eCodigo').value.trim();
+  const lotes = lotesDeCodigo(codigo);
+  const sel = document.getElementById('eLoteSelect');
+  const chk = document.getElementById('eNuevoLoteChk');
+
+  if (lotes.length > 0) {
+    sel.innerHTML = lotes.map(l => `<option value="${esc(l.Lote)}">${esc(l.Lote)}</option>`).join('');
+    document.getElementById('eRepuestoInfo').value = lotes[0].Repuesto;
+    document.getElementById('eModeloInfo').value = lotes[0].Modelo;
+    document.getElementById('eRepuestoInfo').disabled = true;
+    document.getElementById('eModeloInfo').disabled = true;
+    document.getElementById('ePrecioSapUsd').value = lotes[0].PrecioSAP_USD || '';
+    if (!chk.checked) {
+      chk.checked = false;
+      sel.style.display = '';
+      document.getElementById('eLoteNuevo').style.display = 'none';
+    }
+  } else {
+    // Código nuevo por completo: forzar modo "nuevo lote" y permitir escribir Repuesto/Modelo
+    sel.innerHTML = '<option value="">— Selecciona un lote —</option>';
+    chk.checked = true;
+    sel.style.display = 'none';
+    document.getElementById('eLoteNuevo').style.display = '';
+    document.getElementById('eRepuestoInfo').disabled = false;
+    document.getElementById('eModeloInfo').disabled = false;
+    if (!codigo) { document.getElementById('eRepuestoInfo').value = ''; document.getElementById('eModeloInfo').value = ''; }
+    document.getElementById('ePrecioSapUsd').value = '';
+  }
+}
+document.getElementById('eCodigo').addEventListener('input', actualizarLotesEntrada);
+
+document.getElementById('eLoteSelect').addEventListener('change', (e) => {
+  const codigo = document.getElementById('eCodigo').value.trim();
+  const lote = DB.Inventario.find(p => (p.Codigo||'').toLowerCase() === codigo.toLowerCase() && p.Lote === e.target.value);
+  if (lote) {
+    document.getElementById('eRepuestoInfo').value = lote.Repuesto;
+    document.getElementById('eModeloInfo').value = lote.Modelo;
+    document.getElementById('ePrecioSapUsd').value = lote.PrecioSAP_USD || '';
+  }
 });
-document.getElementById('eCodigo').addEventListener('input', (e) => {
-  const p = findByCodigo(e.target.value.trim());
-  document.getElementById('eRepuestoInfo').value = p ? p.Repuesto : '';
-  document.getElementById('eModeloInfo').value = p ? p.Modelo : '';
+
+document.getElementById('eNuevoLoteChk').addEventListener('change', (e) => {
+  const sel = document.getElementById('eLoteSelect');
+  const nuevo = document.getElementById('eLoteNuevo');
+  if (e.target.checked) {
+    sel.style.display = 'none';
+    nuevo.style.display = '';
+    nuevo.value = '';
+    document.getElementById('ePrecioSapUsd').value = '';
+  } else {
+    sel.style.display = '';
+    nuevo.style.display = 'none';
+    actualizarLotesEntrada();
+  }
 });
 
 document.getElementById('btnSaveEntrada').addEventListener('click', async () => {
   const codigo = document.getElementById('eCodigo').value.trim();
-  const lote = document.getElementById('eLote').value.trim();
+  const esNuevoLote = document.getElementById('eNuevoLoteChk').checked;
+  const lote = (esNuevoLote ? document.getElementById('eLoteNuevo').value : document.getElementById('eLoteSelect').value).trim();
   const cantidad = toNum(document.getElementById('eCantidad').value);
   if (!codigo || !lote || cantidad <= 0) { showToast('Completa código, lote y cantidad'); return; }
+  const repuesto = document.getElementById('eRepuestoInfo').value.trim();
+  const modelo = document.getElementById('eModeloInfo').value.trim();
   const psapUsd = toNum(document.getElementById('ePrecioSapUsd').value);
   const tc = toNum(document.getElementById('eTc').value);
   const precioCompra = Math.round(psapUsd*tc*100)/100;
@@ -678,12 +738,11 @@ document.getElementById('btnSaveEntrada').addEventListener('click', async () => 
   if (existing) {
     await apiPost('Inventario', 'update', id, { Stock: toNum(existing.Stock) + cantidad, PrecioSAP_USD: psapUsd, TC: tc, PrecioSAP_S: precioCompra });
   } else {
-    // buscar Repuesto/Modelo/PrecioVenta/PVP de otro lote del mismo codigo, si existe
     const sibling = DB.Inventario.find(p => p.Codigo === codigo);
     await apiPost('Inventario', 'add', null, {
       ID: id, Codigo: codigo, Lote: lote, FechaLote: fecha,
-      Repuesto: sibling ? sibling.Repuesto : codigo,
-      Modelo: sibling ? sibling.Modelo : '',
+      Repuesto: repuesto || (sibling ? sibling.Repuesto : codigo),
+      Modelo: modelo || (sibling ? sibling.Modelo : ''),
       PrecioSAP_USD: psapUsd, TC: tc, PrecioSAP_S: precioCompra,
       PrecioVenta: sibling ? sibling.PrecioVenta : 0,
       PVP: sibling ? sibling.PVP : 0,
@@ -694,7 +753,7 @@ document.getElementById('btnSaveEntrada').addEventListener('click', async () => 
   const invRow = existing || DB.Inventario.find(p => p.Codigo === codigo) || {};
   await apiPost('Movimientos', 'add', null, {
     ID: uid('M'), Fecha: fecha, Tipo: 'Entrada', Lote: lote, Codigo: codigo,
-    Modelo: invRow.Modelo || '', Repuesto: invRow.Repuesto || '',
+    Modelo: invRow.Modelo || modelo, Repuesto: invRow.Repuesto || repuesto,
     PrecioSAP: psapUsd, TC: tc, PrecioCompra: precioCompra, PrecioVenta: '',
     Cantidad: cantidad, TotalCompra: Math.round(precioCompra*cantidad*100)/100, TotalVenta: '', Ganancia: 0,
     NroPedido: document.getElementById('eNroPedido').value.trim(), PrecioEspecial: 'FALSE'
