@@ -205,6 +205,7 @@
       <button class="btn primary" id="btnNewProducto">+ Nuevo producto / lote</button>
     </div>
     <div class="table-scroll" id="invTableContainer"><div class="loading">Cargando inventario...</div></div>
+    <div id="invPagination" style="display:flex; justify-content:center; align-items:center; gap:12px; margin-top:14px;"></div>
   </div>
 
   <!-- MOVIMIENTOS -->
@@ -219,9 +220,11 @@
     </div>
     <div id="sub-mov-entradas">
       <div class="table-scroll" id="movEntradasContainer"><div class="loading">Cargando entradas...</div></div>
+      <div id="entradasPagination" style="display:flex; justify-content:center; align-items:center; gap:12px; margin-top:14px;"></div>
     </div>
     <div id="sub-mov-salidas" style="display:none;">
       <div class="table-scroll" id="movSalidasContainer"><div class="loading">Cargando salidas...</div></div>
+      <div id="salidasPagination" style="display:flex; justify-content:center; align-items:center; gap:12px; margin-top:14px;"></div>
     </div>
   </div>
 
@@ -371,6 +374,8 @@ let WEBAPP_URL = localStorage.getItem(CONFIG_KEY_URL) || DEFAULT_WEBAPP_URL;
 
 let DB = { Inventario: [], Movimientos: [], Gastos: [], Retiro: [] };
 let editingProductoId = null;
+let invPage = 1, entradasPage = 1, salidasPage = 1;
+const INV_PAGE_SIZE = 12, MOV_PAGE_SIZE = 15;
 let grType = null; // 'Gastos' | 'Retiro'
 let editingGRId = null;
 let editingMovId = null;
@@ -491,9 +496,13 @@ function renderInventario() {
   });
   if (DB.Inventario.length === 0) {
     container.innerHTML = '<div class="empty-state">Aún no hay productos. Usa "Nuevo producto / lote" para empezar.</div>';
+    document.getElementById('invPagination').innerHTML = '';
     return;
   }
-  const rows = list.map(p => {
+  const totalPages = Math.max(1, Math.ceil(list.length / INV_PAGE_SIZE));
+  if (invPage > totalPages) invPage = totalPages;
+  const pageList = list.slice((invPage-1)*INV_PAGE_SIZE, invPage*INV_PAGE_SIZE);
+  const rows = pageList.map(p => {
     const status = stockStatus(p);
     const badge = status === 'ok' ? '<span class="badge ok">En stock</span>' : status === 'low' ? '<span class="badge low">Stock bajo</span>' : '<span class="badge out">Agotado</span>';
     return `<tr>
@@ -511,11 +520,25 @@ function renderInventario() {
     <th>Código</th><th>Lote</th><th>Repuesto</th><th>Modelo</th><th>P. SAP $</th><th>T/C</th>
     <th>P. SAP S/</th><th>P. venta</th><th>PVP</th><th>Stock</th><th>Valor IN</th><th>Estado</th><th></th>
   </tr></thead><tbody>${rows}</tbody></table>`;
+  renderPagination('invPagination', list.length, INV_PAGE_SIZE, invPage, (p) => { invPage = p; renderInventario(); });
 }
 function esc(str) { const d = document.createElement('div'); d.textContent = str == null ? '' : str; return d.innerHTML; }
 
-document.getElementById('invSearch').addEventListener('input', renderInventario);
-document.getElementById('invFilter').addEventListener('change', renderInventario);
+function renderPagination(containerId, totalItems, pageSize, currentPage, onChange) {
+  const container = document.getElementById(containerId);
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  if (totalItems <= pageSize) { container.innerHTML = ''; return; }
+  container.innerHTML = `
+    <button class="btn small" id="${containerId}-prev" ${currentPage <= 1 ? 'disabled' : ''}>← Anterior</button>
+    <span style="font-size:13px; color:var(--text-muted);">Página ${currentPage} de ${totalPages}</span>
+    <button class="btn small" id="${containerId}-next" ${currentPage >= totalPages ? 'disabled' : ''}>Siguiente →</button>
+  `;
+  document.getElementById(containerId+'-prev').addEventListener('click', () => onChange(currentPage - 1));
+  document.getElementById(containerId+'-next').addEventListener('click', () => onChange(currentPage + 1));
+}
+
+document.getElementById('invSearch').addEventListener('input', () => { invPage = 1; renderInventario(); });
+document.getElementById('invFilter').addEventListener('change', () => { invPage = 1; renderInventario(); });
 
 function openNewProducto() {
   editingProductoId = null;
@@ -589,9 +612,13 @@ function renderEntradasTable(list) {
   const container = document.getElementById('movEntradasContainer');
   if (list.length === 0) {
     container.innerHTML = '<div class="empty-state">Aún no hay entradas registradas.</div>';
+    document.getElementById('entradasPagination').innerHTML = '';
     return;
   }
-  const rows = list.map(m => `<tr>
+  const totalPages = Math.max(1, Math.ceil(list.length / MOV_PAGE_SIZE));
+  if (entradasPage > totalPages) entradasPage = totalPages;
+  const pageList = list.slice((entradasPage-1)*MOV_PAGE_SIZE, entradasPage*MOV_PAGE_SIZE);
+  const rows = pageList.map(m => `<tr>
       <td>${esc(dateOnly(m.Fecha))}</td><td>${esc(m.Codigo)}</td><td>${esc(m.Repuesto)}</td><td>${esc(m.Modelo)}</td>
       <td>${esc(m.Lote)}</td><td>${toNum(m.Cantidad)}</td><td>${toNum(m.TC).toFixed(3)}</td>
       <td>${money(m.PrecioCompra)}</td><td>${money(m.TotalCompra)}</td><td>${esc(m.NroPedido)}</td>
@@ -604,15 +631,20 @@ function renderEntradasTable(list) {
     <th>Fecha</th><th>Código</th><th>Repuesto</th><th>Modelo</th><th>Lote</th><th>Cant.</th>
     <th>T/C</th><th>P. compra</th><th>Total compra</th><th>N° Pedido</th><th></th>
   </tr></thead><tbody>${rows}</tbody></table>`;
+  renderPagination('entradasPagination', list.length, MOV_PAGE_SIZE, entradasPage, (p) => { entradasPage = p; renderMovimientos(); });
 }
 
 function renderSalidasTable(list) {
   const container = document.getElementById('movSalidasContainer');
   if (list.length === 0) {
     container.innerHTML = '<div class="empty-state">Aún no hay salidas registradas.</div>';
+    document.getElementById('salidasPagination').innerHTML = '';
     return;
   }
-  const rows = list.map(m => `<tr>
+  const totalPages = Math.max(1, Math.ceil(list.length / MOV_PAGE_SIZE));
+  if (salidasPage > totalPages) salidasPage = totalPages;
+  const pageList = list.slice((salidasPage-1)*MOV_PAGE_SIZE, salidasPage*MOV_PAGE_SIZE);
+  const rows = pageList.map(m => `<tr>
       <td>${esc(dateOnly(m.Fecha))}</td><td>${esc(m.Codigo)}</td><td>${esc(m.Repuesto)}</td><td>${esc(m.Modelo)}</td>
       <td>${esc(m.Lote)}</td><td>${toNum(m.Cantidad)}</td>
       <td>${money(m.PrecioVenta)}</td><td>${money(m.TotalVenta)}</td><td>${money(m.Ganancia)}</td>
@@ -625,6 +657,7 @@ function renderSalidasTable(list) {
     <th>Fecha</th><th>Código</th><th>Repuesto</th><th>Modelo</th><th>Lote</th><th>Cant.</th>
     <th>P. venta</th><th>Total venta</th><th>Ganancia</th><th></th>
   </tr></thead><tbody>${rows}</tbody></table>`;
+  renderPagination('salidasPagination', list.length, MOV_PAGE_SIZE, salidasPage, (p) => { salidasPage = p; renderMovimientos(); });
 }
 
 document.querySelectorAll('[data-movtab]').forEach(tab => {
