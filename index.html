@@ -413,9 +413,11 @@ async function apiPost(sheet, action, id, data) {
     body: JSON.stringify({ sheet, action, id, data })
   });
   const json = await res.json();
-  const fresh = json.data || [];
-  DB[sheet] = fresh; // mantiene el estado local al día sin recargar todo
-  return fresh;
+  if (!Array.isArray(json.data)) {
+    throw new Error(json.error || 'Respuesta inválida del servidor');
+  }
+  DB[sheet] = json.data; // mantiene el estado local al día sin recargar todo
+  return json.data;
 }
 
 async function loadAll() {
@@ -568,6 +570,12 @@ document.getElementById('btnNewProducto').addEventListener('click', openNewProdu
 document.getElementById('btnCancelProducto').addEventListener('click', () => document.getElementById('modalProducto').classList.remove('open'));
 
 document.getElementById('btnSaveProducto').addEventListener('click', async () => {
+  const __btn = document.getElementById('btnSaveProducto');
+  if (__btn.disabled) return;
+  const __origLabel = __btn.textContent;
+  __btn.disabled = true;
+  __btn.textContent = 'Guardando...';
+  try {
   const codigo = document.getElementById('pCodigo').value.trim();
   const lote = document.getElementById('pLote').value.trim();
   if (!codigo || !lote) { showToast('Código y Lote son obligatorios'); return; }
@@ -592,6 +600,13 @@ document.getElementById('btnSaveProducto').addEventListener('click', async () =>
   document.getElementById('modalProducto').classList.remove('open');
   renderAll();
   showToast('Guardado');
+} catch (err) {
+    showToast('Error al guardar. Intenta de nuevo.');
+    console.error(err);
+  } finally {
+    __btn.disabled = false;
+    __btn.textContent = __origLabel;
+  }
 });
 
 async function deleteProducto(id) {
@@ -754,6 +769,12 @@ document.getElementById('eNuevoLoteChk').addEventListener('change', (e) => {
 });
 
 document.getElementById('btnSaveEntrada').addEventListener('click', async () => {
+  const __btn = document.getElementById('btnSaveEntrada');
+  if (__btn.disabled) return;
+  const __origLabel = __btn.textContent;
+  __btn.disabled = true;
+  __btn.textContent = 'Guardando...';
+  try {
   const codigo = document.getElementById('eCodigo').value.trim();
   const esNuevoLote = document.getElementById('eNuevoLoteChk').checked;
   const lote = (esNuevoLote ? document.getElementById('eLoteNuevo').value : document.getElementById('eLoteSelect').value).trim();
@@ -795,6 +816,13 @@ document.getElementById('btnSaveEntrada').addEventListener('click', async () => 
   document.getElementById('modalEntrada').classList.remove('open');
   renderAll();
   showToast('Entrada registrada');
+} catch (err) {
+    showToast('Error al guardar. Intenta de nuevo.');
+    console.error(err);
+  } finally {
+    __btn.disabled = false;
+    __btn.textContent = __origLabel;
+  }
 });
 
 // Salida modal
@@ -830,6 +858,12 @@ document.getElementById('sPrecioEspecialChk').addEventListener('change', (e) => 
 });
 
 document.getElementById('btnSaveSalida').addEventListener('click', async () => {
+  const __btn = document.getElementById('btnSaveSalida');
+  if (__btn.disabled) return;
+  const __origLabel = __btn.textContent;
+  __btn.disabled = true;
+  __btn.textContent = 'Guardando...';
+  try {
   const codigo = document.getElementById('sCodigo').value.trim();
   let cantidad = toNum(document.getElementById('sCantidad').value);
   const fecha = document.getElementById('sFecha').value;
@@ -870,6 +904,13 @@ document.getElementById('btnSaveSalida').addEventListener('click', async () => {
   document.getElementById('modalSalida').classList.remove('open');
   renderAll();
   showToast('Salida registrada');
+} catch (err) {
+    showToast('Error al guardar. Intenta de nuevo.');
+    console.error(err);
+  } finally {
+    __btn.disabled = false;
+    __btn.textContent = __origLabel;
+  }
 });
 
 // Editar / eliminar movimiento
@@ -883,6 +924,12 @@ function openEditMov(id) {
 }
 document.getElementById('btnCancelEditMov').addEventListener('click', () => document.getElementById('modalEditMov').classList.remove('open'));
 document.getElementById('btnSaveEditMov').addEventListener('click', async () => {
+  const __btn = document.getElementById('btnSaveEditMov');
+  if (__btn.disabled) return;
+  const __origLabel = __btn.textContent;
+  __btn.disabled = true;
+  __btn.textContent = 'Guardando...';
+  try {
   const m = DB.Movimientos.find(x => x.ID === editingMovId);
   if (!m) return;
   const nuevaCantidad = toNum(document.getElementById('emCantidad').value);
@@ -910,6 +957,13 @@ document.getElementById('btnSaveEditMov').addEventListener('click', async () => 
   document.getElementById('modalEditMov').classList.remove('open');
   renderAll();
   showToast('Cantidad actualizada');
+} catch (err) {
+    showToast('Error al guardar. Intenta de nuevo.');
+    console.error(err);
+  } finally {
+    __btn.disabled = false;
+    __btn.textContent = __origLabel;
+  }
 });
 
 async function deleteMov(id) {
@@ -976,6 +1030,12 @@ function openEditGR(sheet, id) {
 }
 document.getElementById('btnCancelGR').addEventListener('click', () => document.getElementById('modalGR').classList.remove('open'));
 document.getElementById('btnSaveGR').addEventListener('click', async () => {
+  const __btn = document.getElementById('btnSaveGR');
+  if (__btn.disabled) return;
+  const __origLabel = __btn.textContent;
+  __btn.disabled = true;
+  __btn.textContent = 'Guardando...';
+  try {
   const data = { Fecha: document.getElementById('grFecha').value, Motivo: document.getElementById('grMotivo').value.trim(), Monto: toNum(document.getElementById('grMonto').value) };
   if (editingGRId) {
     await apiPost(grType, 'update', editingGRId, data);
@@ -986,6 +1046,13 @@ document.getElementById('btnSaveGR').addEventListener('click', async () => {
   document.getElementById('modalGR').classList.remove('open');
   renderAll();
   showToast('Guardado');
+} catch (err) {
+    showToast('Error al guardar. Intenta de nuevo.');
+    console.error(err);
+  } finally {
+    __btn.disabled = false;
+    __btn.textContent = __origLabel;
+  }
 });
 async function deleteGR(sheet, id) {
   if (!confirm('¿Eliminar este registro?')) return;
