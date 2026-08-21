@@ -419,6 +419,19 @@ async function apiPost(sheet, action, id, data) {
   DB[sheet] = json.data; // mantiene el estado local al día sin recargar todo
   return json.data;
 }
+async function apiBatch(ops) {
+  const res = await fetch(WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'batch', ops })
+  });
+  const json = await res.json();
+  if (!json.data || typeof json.data !== 'object') {
+    throw new Error(json.error || 'Respuesta inválida del servidor');
+  }
+  Object.keys(json.data).forEach(sheet => { DB[sheet] = json.data[sheet]; });
+  return json.data;
+}
 
 async function loadAll() {
   if (!WEBAPP_URL) {
@@ -788,30 +801,31 @@ document.getElementById('btnSaveEntrada').addEventListener('click', async () => 
   const fecha = document.getElementById('eFecha').value;
   const id = codigo + '|' + lote;
   let existing = DB.Inventario.find(p => p.ID === id);
-
-  if (existing) {
-    await apiPost('Inventario', 'update', id, { Stock: toNum(existing.Stock) + cantidad, PrecioSAP_USD: psapUsd, TC: tc, PrecioSAP_S: precioCompra });
-  } else {
-    const sibling = DB.Inventario.find(p => p.Codigo === codigo);
-    await apiPost('Inventario', 'add', null, {
-      ID: id, Codigo: codigo, Lote: lote, FechaLote: fecha,
-      Repuesto: repuesto || (sibling ? sibling.Repuesto : codigo),
-      Modelo: modelo || (sibling ? sibling.Modelo : ''),
-      PrecioSAP_USD: psapUsd, TC: tc, PrecioSAP_S: precioCompra,
-      PrecioVenta: sibling ? sibling.PrecioVenta : 0,
-      PVP: sibling ? sibling.PVP : 0,
-      Stock: cantidad
-    });
-  }
+  const invOp = existing
+    ? { sheet: 'Inventario', action: 'update', id: id, data: { Stock: toNum(existing.Stock) + cantidad, PrecioSAP_USD: psapUsd, TC: tc, PrecioSAP_S: precioCompra, FechaLote: fecha } }
+    : { sheet: 'Inventario', action: 'add', data: (() => {
+        const sibling = DB.Inventario.find(p => p.Codigo === codigo);
+        return {
+          ID: id, Codigo: codigo, Lote: lote, FechaLote: fecha,
+          Repuesto: repuesto || (sibling ? sibling.Repuesto : codigo),
+          Modelo: modelo || (sibling ? sibling.Modelo : ''),
+          PrecioSAP_USD: psapUsd, TC: tc, PrecioSAP_S: precioCompra,
+          PrecioVenta: sibling ? sibling.PrecioVenta : 0,
+          PVP: sibling ? sibling.PVP : 0,
+          Stock: cantidad
+        };
+      })() };
 
   const invRow = existing || DB.Inventario.find(p => p.Codigo === codigo) || {};
-  await apiPost('Movimientos', 'add', null, {
+  const movOp = { sheet: 'Movimientos', action: 'add', data: {
     ID: uid('M'), Fecha: fecha, Tipo: 'Entrada', Lote: lote, Codigo: codigo,
     Modelo: invRow.Modelo || modelo, Repuesto: invRow.Repuesto || repuesto,
     PrecioSAP: psapUsd, TC: tc, PrecioCompra: precioCompra, PrecioVenta: '',
     Cantidad: cantidad, TotalCompra: Math.round(precioCompra*cantidad*100)/100, TotalVenta: '', Ganancia: 0,
     NroPedido: document.getElementById('eNroPedido').value.trim(), PrecioEspecial: 'FALSE'
-  });
+  }};
+
+  await apiBatch([invOp, movOp]);
 
   document.getElementById('modalEntrada').classList.remove('open');
   renderAll();
@@ -883,6 +897,7 @@ document.getElementById('btnSaveSalida').addEventListener('click', async () => {
   }
 
   let restante = cantidad;
+  const ops = [];
   for (const lote of lotes) {
     if (restante <= 0) break;
     const stockLote = toNum(lote.Stock);
@@ -891,15 +906,16 @@ document.getElementById('btnSaveSalida').addEventListener('click', async () => {
     const precioVenta = especial ? precioEspecial : toNum(lote.PrecioVenta);
     const ganancia = Math.round((precioVenta - toNum(lote.PrecioSAP_S)) * consumo * 100) / 100;
 
-    await apiPost('Inventario', 'update', lote.ID, { Stock: stockLote - consumo });
-    await apiPost('Movimientos', 'add', null, {
+    ops.push({ sheet: 'Inventario', action: 'update', id: lote.ID, data: { Stock: stockLote - consumo } });
+    ops.push({ sheet: 'Movimientos', action: 'add', data: {
       ID: uid('M'), Fecha: fecha, Tipo: 'Salida', Lote: lote.Lote, Codigo: lote.Codigo,
       Modelo: lote.Modelo, Repuesto: lote.Repuesto,
       PrecioSAP: lote.PrecioSAP_USD, TC: lote.TC, PrecioCompra: lote.PrecioSAP_S, PrecioVenta: precioVenta,
       Cantidad: consumo, TotalCompra: '', TotalVenta: Math.round(precioVenta*consumo*100)/100, Ganancia: ganancia,
       NroPedido: '', PrecioEspecial: especial ? 'TRUE' : 'FALSE'
-    });
+    }});
   }
+  await apiBatch(ops);
 
   document.getElementById('modalSalida').classList.remove('open');
   renderAll();
@@ -939,9 +955,10 @@ document.getElementById('btnSaveEditMov').addEventListener('click', async () => 
 
   // Ajustar stock del lote correspondiente
   const lote = DB.Inventario.find(p => p.Codigo === m.Codigo && p.Lote === m.Lote);
+  const ops = [];
   if (lote) {
     const ajuste = m.Tipo === 'Entrada' ? delta : -delta;
-    await apiPost('Inventario', 'update', lote.ID, { Stock: toNum(lote.Stock) + ajuste });
+    ops.push({ sheet: 'Inventario', action: 'update', id: lote.ID, data: { Stock: toNum(lote.Stock) + ajuste } });
   }
 
   // Recalcular totales del movimiento
@@ -952,7 +969,8 @@ document.getElementById('btnSaveEditMov').addEventListener('click', async () => 
     data.TotalVenta = Math.round(toNum(m.PrecioVenta) * nuevaCantidad * 100) / 100;
     data.Ganancia = Math.round((toNum(m.PrecioVenta) - toNum(m.PrecioCompra)) * nuevaCantidad * 100) / 100;
   }
-  await apiPost('Movimientos', 'update', editingMovId, data);
+  ops.push({ sheet: 'Movimientos', action: 'update', id: editingMovId, data });
+  await apiBatch(ops);
 
   document.getElementById('modalEditMov').classList.remove('open');
   renderAll();
@@ -972,13 +990,20 @@ async function deleteMov(id) {
   if (!confirm(`¿Eliminar este movimiento de ${m.Tipo.toLowerCase()} (${m.Repuesto}, cantidad ${toNum(m.Cantidad)})? Esto también ajustará el stock.`)) return;
 
   const lote = DB.Inventario.find(p => p.Codigo === m.Codigo && p.Lote === m.Lote);
+  const ops = [];
   if (lote) {
     const ajuste = m.Tipo === 'Entrada' ? -toNum(m.Cantidad) : toNum(m.Cantidad);
-    await apiPost('Inventario', 'update', lote.ID, { Stock: toNum(lote.Stock) + ajuste });
+    ops.push({ sheet: 'Inventario', action: 'update', id: lote.ID, data: { Stock: toNum(lote.Stock) + ajuste } });
   }
-  await apiPost('Movimientos', 'delete', id, {});
-  renderAll();
-  showToast('Movimiento eliminado');
+  ops.push({ sheet: 'Movimientos', action: 'delete', id: id });
+  try {
+    await apiBatch(ops);
+    renderAll();
+    showToast('Movimiento eliminado');
+  } catch (err) {
+    showToast('Error al eliminar. Intenta de nuevo.');
+    console.error(err);
+  }
 }
 
 // ---------- GASTOS / RETIROS ----------
