@@ -374,6 +374,11 @@ let WEBAPP_URL = localStorage.getItem(CONFIG_KEY_URL) || DEFAULT_WEBAPP_URL;
 
 let DB = { Inventario: [], Movimientos: [], Gastos: [], Retiro: [] };
 let editingProductoId = null;
+let appBusy = false;
+function checkBusy() {
+  if (appBusy) { showToast('Espera a que termine el registro anterior...'); return true; }
+  return false;
+}
 let invPage = 1, entradasPage = 1, salidasPage = 1;
 const INV_PAGE_SIZE = 12, MOV_PAGE_SIZE = 15;
 let grType = null; // 'Gastos' | 'Retiro'
@@ -391,7 +396,13 @@ function toNum(v) {
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
-function todayStr() { return new Date().toISOString().slice(0,10); }
+function todayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 function dateOnly(v) { if (!v) return ''; v = String(v); return v.includes('T') ? v.slice(0,10) : v; }
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -556,6 +567,7 @@ document.getElementById('invSearch').addEventListener('input', () => { invPage =
 document.getElementById('invFilter').addEventListener('change', () => { invPage = 1; renderInventario(); });
 
 function openNewProducto() {
+  if (checkBusy()) return;
   editingProductoId = null;
   document.getElementById('modalProductoTitle').textContent = 'Nuevo producto / lote';
   ['pCodigo','pLote','pRepuesto','pModelo','pPrecioSapUsd','pTc','pPrecioVenta','pPvp','pStock'].forEach(id => document.getElementById(id).value = '');
@@ -584,7 +596,8 @@ document.getElementById('btnCancelProducto').addEventListener('click', () => doc
 
 document.getElementById('btnSaveProducto').addEventListener('click', async () => {
   const __btn = document.getElementById('btnSaveProducto');
-  if (__btn.disabled) return;
+  if (checkBusy()) return;
+  appBusy = true;
   const __origLabel = __btn.textContent;
   __btn.disabled = true;
   __btn.textContent = 'Guardando...';
@@ -617,16 +630,26 @@ document.getElementById('btnSaveProducto').addEventListener('click', async () =>
     showToast('Error al guardar. Intenta de nuevo.');
     console.error(err);
   } finally {
+    appBusy = false;
     __btn.disabled = false;
     __btn.textContent = __origLabel;
   }
 });
 
 async function deleteProducto(id) {
+  if (checkBusy()) return;
   if (!confirm('¿Eliminar este producto/lote del inventario?')) return;
-  await apiPost('Inventario', 'delete', id, {});
-  renderAll();
-  showToast('Eliminado');
+  appBusy = true;
+  try {
+    await apiPost('Inventario', 'delete', id, {});
+    renderAll();
+    showToast('Eliminado');
+  } catch (err) {
+    showToast('Error al eliminar. Intenta de nuevo.');
+    console.error(err);
+  } finally {
+    appBusy = false;
+  }
 }
 
 // ---------- MOVIMIENTOS ----------
@@ -710,6 +733,7 @@ function lotesDeCodigo(codigo) {
 
 // Entrada modal
 document.getElementById('btnNewEntrada').addEventListener('click', () => {
+  if (checkBusy()) return;
   ['eCodigo','ePrecioSapUsd','eTc','eCantidad','eNroPedido','eLoteNuevo'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('eRepuestoInfo').value = '';
   document.getElementById('eModeloInfo').value = '';
@@ -783,7 +807,8 @@ document.getElementById('eNuevoLoteChk').addEventListener('change', (e) => {
 
 document.getElementById('btnSaveEntrada').addEventListener('click', async () => {
   const __btn = document.getElementById('btnSaveEntrada');
-  if (__btn.disabled) return;
+  if (checkBusy()) return;
+  appBusy = true;
   const __origLabel = __btn.textContent;
   __btn.disabled = true;
   __btn.textContent = 'Guardando...';
@@ -834,6 +859,7 @@ document.getElementById('btnSaveEntrada').addEventListener('click', async () => 
     showToast('Error al guardar. Intenta de nuevo.');
     console.error(err);
   } finally {
+    appBusy = false;
     __btn.disabled = false;
     __btn.textContent = __origLabel;
   }
@@ -841,6 +867,7 @@ document.getElementById('btnSaveEntrada').addEventListener('click', async () => 
 
 // Salida modal
 document.getElementById('btnNewSalida').addEventListener('click', () => {
+  if (checkBusy()) return;
   document.getElementById('sCodigo').value = '';
   document.getElementById('sRepuestoInfo').value = '';
   document.getElementById('sModeloInfo').value = '';
@@ -873,7 +900,8 @@ document.getElementById('sPrecioEspecialChk').addEventListener('change', (e) => 
 
 document.getElementById('btnSaveSalida').addEventListener('click', async () => {
   const __btn = document.getElementById('btnSaveSalida');
-  if (__btn.disabled) return;
+  if (checkBusy()) return;
+  appBusy = true;
   const __origLabel = __btn.textContent;
   __btn.disabled = true;
   __btn.textContent = 'Guardando...';
@@ -924,6 +952,7 @@ document.getElementById('btnSaveSalida').addEventListener('click', async () => {
     showToast('Error al guardar. Intenta de nuevo.');
     console.error(err);
   } finally {
+    appBusy = false;
     __btn.disabled = false;
     __btn.textContent = __origLabel;
   }
@@ -941,7 +970,8 @@ function openEditMov(id) {
 document.getElementById('btnCancelEditMov').addEventListener('click', () => document.getElementById('modalEditMov').classList.remove('open'));
 document.getElementById('btnSaveEditMov').addEventListener('click', async () => {
   const __btn = document.getElementById('btnSaveEditMov');
-  if (__btn.disabled) return;
+  if (checkBusy()) return;
+  appBusy = true;
   const __origLabel = __btn.textContent;
   __btn.disabled = true;
   __btn.textContent = 'Guardando...';
@@ -979,12 +1009,14 @@ document.getElementById('btnSaveEditMov').addEventListener('click', async () => 
     showToast('Error al guardar. Intenta de nuevo.');
     console.error(err);
   } finally {
+    appBusy = false;
     __btn.disabled = false;
     __btn.textContent = __origLabel;
   }
 });
 
 async function deleteMov(id) {
+  if (checkBusy()) return;
   const m = DB.Movimientos.find(x => x.ID === id);
   if (!m) return;
   if (!confirm(`¿Eliminar este movimiento de ${m.Tipo.toLowerCase()} (${m.Repuesto}, cantidad ${toNum(m.Cantidad)})? Esto también ajustará el stock.`)) return;
@@ -996,6 +1028,7 @@ async function deleteMov(id) {
     ops.push({ sheet: 'Inventario', action: 'update', id: lote.ID, data: { Stock: toNum(lote.Stock) + ajuste } });
   }
   ops.push({ sheet: 'Movimientos', action: 'delete', id: id });
+  appBusy = true;
   try {
     await apiBatch(ops);
     renderAll();
@@ -1003,6 +1036,8 @@ async function deleteMov(id) {
   } catch (err) {
     showToast('Error al eliminar. Intenta de nuevo.');
     console.error(err);
+  } finally {
+    appBusy = false;
   }
 }
 
@@ -1035,6 +1070,7 @@ function renderRetiros() { renderGRTable(DB.Retiro, 'retirosTableContainer', 'Re
 document.getElementById('btnNewGasto').addEventListener('click', () => openNewGR('Gastos'));
 document.getElementById('btnNewRetiro').addEventListener('click', () => openNewGR('Retiro'));
 function openNewGR(sheet) {
+  if (checkBusy()) return;
   grType = sheet; editingGRId = null;
   document.getElementById('modalGRTitle').textContent = sheet === 'Gastos' ? 'Nuevo gasto' : 'Nuevo retiro';
   document.getElementById('grFecha').value = todayStr();
@@ -1056,7 +1092,8 @@ function openEditGR(sheet, id) {
 document.getElementById('btnCancelGR').addEventListener('click', () => document.getElementById('modalGR').classList.remove('open'));
 document.getElementById('btnSaveGR').addEventListener('click', async () => {
   const __btn = document.getElementById('btnSaveGR');
-  if (__btn.disabled) return;
+  if (checkBusy()) return;
+  appBusy = true;
   const __origLabel = __btn.textContent;
   __btn.disabled = true;
   __btn.textContent = 'Guardando...';
@@ -1075,15 +1112,25 @@ document.getElementById('btnSaveGR').addEventListener('click', async () => {
     showToast('Error al guardar. Intenta de nuevo.');
     console.error(err);
   } finally {
+    appBusy = false;
     __btn.disabled = false;
     __btn.textContent = __origLabel;
   }
 });
 async function deleteGR(sheet, id) {
+  if (checkBusy()) return;
   if (!confirm('¿Eliminar este registro?')) return;
-  await apiPost(sheet, 'delete', id, {});
-  renderAll();
-  showToast('Eliminado');
+  appBusy = true;
+  try {
+    await apiPost(sheet, 'delete', id, {});
+    renderAll();
+    showToast('Eliminado');
+  } catch (err) {
+    showToast('Error al eliminar. Intenta de nuevo.');
+    console.error(err);
+  } finally {
+    appBusy = false;
+  }
 }
 
 // ---------- NAV ----------
