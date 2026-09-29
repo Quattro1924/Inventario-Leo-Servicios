@@ -377,7 +377,7 @@ const CONFIG_KEY_INV = 'inv_honda_inversion';
 const DEFAULT_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwIRnVPgmyIGao8xS8LQN4lwNgSYm6WP-AMMPa6lqoduA2q-rKweSivBTRFP2ztuYFI/exec';
 let WEBAPP_URL = localStorage.getItem(CONFIG_KEY_URL) || DEFAULT_WEBAPP_URL;
 
-let DB = { Inventario: [], Movimientos: [], Gastos: [], Retiro: [] };
+let DB = { Inventario: [], Movimientos: [], Gastos: [], Retiro: [], TotalesHistoricos: [] };
 let editingProductoId = null;
 let appBusy = false;
 function checkBusy() {
@@ -457,10 +457,10 @@ async function loadAll() {
   }
   try {
     document.getElementById('connStatus').textContent = 'Conectando...';
-    const [inv, mov, gas, ret] = await Promise.all([
-      apiGet('Inventario'), apiGet('Movimientos'), apiGet('Gastos'), apiGet('Retiro')
+    const [inv, mov, gas, ret, hist] = await Promise.all([
+      apiGet('Inventario'), apiGet('Movimientos'), apiGet('Gastos'), apiGet('Retiro'), apiGet('TotalesHistoricos')
     ]);
-    DB.Inventario = inv; DB.Movimientos = mov; DB.Gastos = gas; DB.Retiro = ret;
+    DB.Inventario = inv; DB.Movimientos = mov; DB.Gastos = gas; DB.Retiro = ret; DB.TotalesHistoricos = hist;
     document.getElementById('connStatus').textContent = '✓ Conectado';
     renderAll();
   } catch (err) {
@@ -506,11 +506,15 @@ document.getElementById('resumenMesSelector').addEventListener('change', renderG
 
 function renderResumen() {
   renderGananciaMensual();
-  const compras = DB.Movimientos.filter(m => m.Tipo === 'Entrada').reduce((s,m) => s + toNum(m.TotalCompra), 0);
-  const ventas = DB.Movimientos.filter(m => m.Tipo === 'Salida').reduce((s,m) => s + toNum(m.TotalVenta), 0);
+  const hist = (DB.TotalesHistoricos && DB.TotalesHistoricos[0]) || {};
+  const histCompras = toNum(hist.ComprasAcumuladas);
+  const histVentas = toNum(hist.VentasAcumuladas);
+  const histGanancia = toNum(hist.GananciaAcumulada);
+  const compras = histCompras + DB.Movimientos.filter(m => m.Tipo === 'Entrada').reduce((s,m) => s + toNum(m.TotalCompra), 0);
+  const ventas = histVentas + DB.Movimientos.filter(m => m.Tipo === 'Salida').reduce((s,m) => s + toNum(m.TotalVenta), 0);
   const gastos = DB.Gastos.reduce((s,g) => s + toNum(g.Monto), 0);
   const retiros = DB.Retiro.reduce((s,r) => s + toNum(r.Monto), 0);
-  const ganBruta = DB.Movimientos.reduce((s,m) => s + toNum(m.Ganancia), 0);
+  const ganBruta = histGanancia + DB.Movimientos.reduce((s,m) => s + toNum(m.Ganancia), 0);
   const ganNeta = ganBruta - gastos;
   const inversion = toNum(localStorage.getItem(CONFIG_KEY_INV) || DEFAULT_INVERSION);
   const rentabilidad = inversion ? (ganNeta / inversion * 100) : 0;
