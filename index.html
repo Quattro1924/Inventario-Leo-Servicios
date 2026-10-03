@@ -173,6 +173,11 @@
       <input id="inversionInput" type="number" step="0.01" placeholder="0.00" style="max-width:200px;">
       <button class="btn small" id="btnSaveInversion" style="margin-left:8px;">Guardar</button>
     </div>
+    <div class="field">
+      <label>Mantenimiento</label>
+      <div><button class="btn" id="btnRecalcularHistoricos">Recalcular totales históricos</button></div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:0;">Usa esto si después de archivar movimientos antiguos el Resumen muestra números que no cuadran.</p>
+    </div>
   </div>
 
   <!-- RESUMEN -->
@@ -1188,6 +1193,36 @@ document.getElementById('btnSaveInversion').addEventListener('click', () => {
   localStorage.setItem(CONFIG_KEY_INV, document.getElementById('inversionInput').value);
   renderResumen();
   showToast('Inversión guardada');
+});
+
+document.getElementById('btnRecalcularHistoricos').addEventListener('click', async () => {
+  if (checkBusy()) return;
+  if (!WEBAPP_URL) { showToast('Primero conecta el programa a tu Sheet'); return; }
+  appBusy = true;
+  const btn = document.getElementById('btnRecalcularHistoricos');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Recalculando...';
+  try {
+    const historico = await apiGet('Movimientos_Historico');
+    const sumCompras = historico.filter(m => m.Tipo === 'Entrada').reduce((s,m) => s + toNum(m.TotalCompra), 0);
+    const sumVentas = historico.filter(m => m.Tipo === 'Salida').reduce((s,m) => s + toNum(m.TotalVenta), 0);
+    const sumGanancia = historico.reduce((s,m) => s + toNum(m.Ganancia), 0);
+    await apiPost('TotalesHistoricos', 'update', 1, {
+      ComprasAcumuladas: Math.round(sumCompras*100)/100,
+      VentasAcumuladas: Math.round(sumVentas*100)/100,
+      GananciaAcumulada: Math.round(sumGanancia*100)/100
+    });
+    renderAll();
+    showToast('Totales históricos recalculados correctamente');
+  } catch (err) {
+    showToast('Error al recalcular. Intenta de nuevo.');
+    console.error(err);
+  } finally {
+    appBusy = false;
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
 });
 
 // init
